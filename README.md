@@ -31,6 +31,20 @@ A browser app that helps immunocompromised people assess whether a location is s
    ```
 3. Open `http://localhost:8000` in your browser
 
+### Optional: Add Google Static Maps (satellite + map images)
+
+1. Enable the **Maps Static API** in [Google Cloud Console](https://console.cloud.google.com/)
+2. Create an API key and restrict it to the Maps Static API + your domain
+3. Before the main script in `index.html`, set:
+   ```html
+   <script>
+     window.GOOGLE_MAPS_KEY = 'your-key-here';
+   </script>
+   ```
+4. The app will display a satellite view and a road map of the searched location in the results header. Without a key, the image section is hidden.
+
+> **Cost:** ~$2 per 1,000 static map requests. Google provides $200/month free credit — effectively free for personal use.
+
 ### Optional: Add AirNow EPA Air Quality Data
 
 By default, the app uses Open-Meteo's AQI estimates. For official EPA AirNow data (US only, higher quality):

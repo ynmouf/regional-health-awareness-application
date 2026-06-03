@@ -78,7 +78,7 @@ async function handleSearch(query, preResolved) {
     }, geo, seasonal);
 
     // Render
-    renderLocationImages(photos);
+    renderLocationImages(photos, geo.lat, geo.lon, geo.displayName);
     renderOverall(geo.displayName, overall);
     renderCategoryCard('air',        airResult.score,  airSummary(airResult.sub, airNow),  airResult.confidence);
     renderCategoryCard('infection',  infResult.score,  infSummary(infResult.sub, cdc),      infResult.confidence);
