@@ -9,7 +9,7 @@ A browser app that helps immunocompromised people assess whether a location is s
 - **Overall safety score** — 0–100, with risk label (Low/Moderate/Elevated/High/Severe)
 - **Customizable weights** — drag sliders to prioritize the factors that matter most for your condition
 - **Seasonal calendar** — 12-month heatmap showing which months are safest
-- **Compare mode** — side-by-side scoring for up to 3 cities
+- **Compare mode** — side-by-side scoring for two cities or ZIP codes
 - **Export to PDF** — print-friendly report with source citations
 - **Completely free** — no registration, no tracking, pure browser app
 

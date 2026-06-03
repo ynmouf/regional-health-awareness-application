@@ -16,7 +16,7 @@ import { renderOverall, renderCategoryCard, renderRadarChart, updateRadarChart }
 import { initDetailPanel, setDetailData } from './ui/detailPanel.js';
 import { renderSeasonalCalendar } from './ui/seasonalCalendar.js';
 import { renderLocationImages } from './ui/locationImages.js';
-import { addCompareResult } from './ui/comparePanel.js';
+import { initComparePanel, openCompare } from './ui/comparePanel.js';
 import { fetchCityPhotos } from './api/images.js';
 import { fetchPlacePhotos } from './api/places.js';
 
@@ -28,6 +28,7 @@ let lastResult = null;
 initSearch(handleSearch);
 initLightbox();
 initDetailPanel();
+initComparePanel(compareLocation);
 initWeightSliders(weights, onWeightsChanged);
 initSettingsPanel();
 initHeaderButtons();
@@ -41,41 +42,14 @@ async function handleSearch(query, preResolved) {
 
   try {
     setLoadingStatus('Locating place…');
-    const geo = preResolved
-      ? { ...preResolved, displayName: preResolved.displayName ?? preResolved.label }
-      : await geocode(query);
-
-    // Fire all API calls in parallel
     setLoadingStatus('Fetching air quality, health & climate data…');
-    const [airNow, openMeteoAQ, googlePollen, weather, cdc, healthcare, seasonal, photos] = await Promise.all([
-      geo.countryCode === 'US' ? fetchAirNow(geo.lat, geo.lon) : Promise.resolve(null),
-      fetchAirQuality(geo.lat, geo.lon),
-      fetchGooglePollen(geo.lat, geo.lon, getGooglePollenKey()),
-      fetchWeather(geo.lat, geo.lon),
-      geo.countryCode === 'US' ? fetchCDCData(geo.stateCode) : Promise.resolve(null),
-      fetchBestHealthcare(geo.lat, geo.lon),
-      fetchSeasonalHistory(geo.lat, geo.lon),
-      // Places API first (user photos), Wikimedia as fallback
-      fetchPlacePhotos(geo.displayName, getGooglePlacesKey()).then(r => r || fetchCityPhotos(geo.displayName)),
-    ]);
-    const airQuality = mergePollen(openMeteoAQ, googlePollen);
+    const assessment = await buildAssessment(query, preResolved, { includePhotos: true, includeSeasonal: true });
+    const {
+      geo, airNow, airQuality, googlePollen, weather, cdc, healthcare, seasonal, photos,
+      airResult, infResult, hcResult, clResult, scores, overall,
+    } = assessment;
 
-    setLoadingStatus('Calculating scores…');
-
-    const airResult = scoreAirQuality(airNow, airQuality);
-    const infResult = scoreInfection(cdc);
-    const hcResult  = scoreHealthcare(healthcare);
-    const clResult  = scoreClimate(weather, airQuality);
-
-    const scores = {
-      air: airResult.score,
-      infection: infResult.score,
-      healthcare: hcResult.score,
-      climate: clResult.score,
-    };
-    const overall = scoreOverall(scores, weights);
-
-    lastResult = { location: geo.displayName, overall, scores, geo };
+    lastResult = assessment.result;
 
     // Attach raw API data for detail panel
     setDetailData({
@@ -117,6 +91,48 @@ async function handleSearch(query, preResolved) {
   } finally {
     showLoading(false);
   }
+}
+
+async function buildAssessment(query, preResolved, options = {}) {
+  const { includePhotos = false, includeSeasonal = false } = options;
+  const geo = preResolved
+    ? { ...preResolved, displayName: preResolved.displayName ?? preResolved.label }
+    : await geocode(query);
+
+  const [airNow, openMeteoAQ, googlePollen, weather, cdc, healthcare, seasonal, photos] = await Promise.all([
+    geo.countryCode === 'US' ? fetchAirNow(geo.lat, geo.lon) : Promise.resolve(null),
+    fetchAirQuality(geo.lat, geo.lon),
+    fetchGooglePollen(geo.lat, geo.lon, getGooglePollenKey()),
+    fetchWeather(geo.lat, geo.lon),
+    geo.countryCode === 'US' ? fetchCDCData(geo.stateCode) : Promise.resolve(null),
+    fetchBestHealthcare(geo.lat, geo.lon),
+    includeSeasonal ? fetchSeasonalHistory(geo.lat, geo.lon) : Promise.resolve(null),
+    includePhotos ? fetchPlacePhotos(geo.displayName, getGooglePlacesKey()).then(r => r || fetchCityPhotos(geo.displayName)) : Promise.resolve(null),
+  ]);
+  const airQuality = mergePollen(openMeteoAQ, googlePollen);
+
+  const airResult = scoreAirQuality(airNow, airQuality);
+  const infResult = scoreInfection(cdc);
+  const hcResult  = scoreHealthcare(healthcare);
+  const clResult  = scoreClimate(weather, airQuality);
+  const scores = {
+    air: airResult.score,
+    infection: infResult.score,
+    healthcare: hcResult.score,
+    climate: clResult.score,
+  };
+  const overall = scoreOverall(scores, weights);
+
+  return {
+    geo, airNow, airQuality, googlePollen, weather, cdc, healthcare, seasonal, photos,
+    airResult, infResult, hcResult, clResult, scores, overall,
+    result: { location: geo.displayName, overall, scores, geo },
+  };
+}
+
+async function compareLocation(query) {
+  const assessment = await buildAssessment(query, null, { includePhotos: false, includeSeasonal: false });
+  return assessment.result;
 }
 
 async function fetchBestHealthcare(lat, lon) {
@@ -175,8 +191,7 @@ function initHeaderButtons() {
 
   document.getElementById('btn-compare').addEventListener('click', () => {
     if (!lastResult) return;
-    addCompareResult(lastResult);
-    document.getElementById('compare-section').scrollIntoView({ behavior: 'smooth' });
+    openCompare(lastResult);
   });
 }
 
