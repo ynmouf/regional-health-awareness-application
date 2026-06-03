@@ -9,7 +9,7 @@ A browser app that helps immunocompromised people assess whether a location is s
 - **Overall safety score** — 0–100, with risk label (Low/Moderate/Elevated/High/Severe)
 - **Customizable weights** — drag sliders to prioritize the factors that matter most for your condition
 - **Seasonal calendar** — 12-month heatmap showing which months are safest
-- **Compare mode** — side-by-side scoring for up to 3 cities
+- **Compare mode** — side-by-side scoring for two cities or ZIP codes
 - **Export to PDF** — print-friendly report with source citations
 - **Completely free** — no registration, no tracking, pure browser app
 
@@ -45,6 +45,22 @@ A browser app that helps immunocompromised people assess whether a location is s
 
 > **Cost:** ~$2 per 1,000 static map requests. Google provides $200/month free credit — effectively free for personal use.
 
+### Optional: Add Google Places and Pollen APIs
+
+For stronger U.S. healthcare facility matching and more specific pollen forecasts:
+
+1. Enable the **Places API (New)** and/or **Pollen API** in Google Cloud Console.
+2. Add keys in `config.local.js`:
+   ```html
+   <script>
+     window.GOOGLE_PLACES_KEY = 'your-places-key';
+     window.GOOGLE_POLLEN_KEY = 'your-pollen-key';
+   </script>
+   ```
+3. If separate keys are not provided, the app will try `window.GOOGLE_MAPS_KEY` for Places/Pollen too. Restrict each key to the specific APIs and domains you use.
+
+Without these keys, healthcare access falls back to OpenStreetMap/Overpass and pollen falls back to Open-Meteo.
+
 ### Optional: Add AirNow EPA Air Quality Data
 
 By default, the app uses Open-Meteo's AQI estimates. For official EPA AirNow data (US only, higher quality):
@@ -76,7 +92,7 @@ git push origin main
 
 - **Framework:** Vanilla JavaScript (ES modules, no build step)
 - **Charts:** Chart.js (CDN)
-- **APIs:** All free, no authentication (except optional AirNow)
+- **APIs:** Free/public fallbacks, with optional AirNow and Google API keys
 
 ### Data Sources
 
@@ -84,10 +100,9 @@ git push origin main
 |--------|-----|----------|
 | Geocoding | Nominatim (OpenStreetMap) | Global |
 | Air Quality | AirNow (EPA) + Open-Meteo | US (AirNow); global (Open-Meteo) |
-| Pollen | Open-Meteo | Global (grass, ragweed, birch) |
-| Flu / Disease | CDC ILINet, RESP-NET | US only (state level) |
-| Vaccination rates | CDC | US only |
-| Healthcare facilities | Overpass API (OSM) | Global |
+| Pollen | Google Pollen API + Open-Meteo | Optional keyed Google; global Open-Meteo fallback |
+| Respiratory disease | CDC ARI Activity, RESP-NET | US only (state level) |
+| Healthcare facilities | Google Places + Overpass API (OSM) | Optional keyed Google; global OSM fallback |
 | Climate | Open-Meteo Weather API | Global |
 | Historical seasonal | Open-Meteo Historical API | Global |
 
@@ -106,6 +121,8 @@ health-location-scorer/
 │   ├── api/                  # Data fetching
 │   │   ├── airnow.js
 │   │   ├── openmeteo.js
+│   │   ├── googleHealthcare.js
+│   │   ├── googlePollen.js
 │   │   ├── cdc.js
 │   │   └── overpass.js
 │   ├── ui/                   # UI rendering & interactions
@@ -116,10 +133,7 @@ health-location-scorer/
 │   │   └── comparePanel.js
 │   └── utils/
 │       ├── cache.js          # localStorage with TTL
-│       ├── fips.js           # FIPS codes
-│       └── regionMap.js      # US state → HHS region mapping
-└── data/
-    └── hhs-regions.json      # CDC HHS regions (static)
+│       └── fips.js           # FIPS codes
 ```
 
 ## Scoring Algorithm
@@ -142,12 +156,12 @@ Users can customize these in the Settings panel.
 - Pollen level (None/Low/Moderate/High/Very High)
 
 **Infection Risk (30%)**
-- Flu ILI% (influenza-like illness percentage)
-- Vaccination rate (flu or COVID proxy)
-- COVID hospitalization rate per 100k
+- CDC acute respiratory illness (ARI) activity level
+- Combined respiratory hospitalization rate per 100k
+- COVID-19, flu, and RSV hospitalization rates per 100k
 
 **Healthcare Access (30%)**
-- Hospital count within 10 km
+- Nearest hospital distance within a 50 km search radius
 - Pharmacy count within 5 km
 - Immunology/allergy specialist within 20 km
 
@@ -159,14 +173,15 @@ Users can customize these in the Settings panel.
 ## Caveats
 
 - **CDC data is state-level, not city-level** — reflects your state average, not your specific neighborhood
-- **Pollen data is regional** — European species (birch, alder) are well-covered; other regions may see limited data
-- **Overpass queries can be slow** — results are cached for 24h locally
-- **No real-time data** — CDC and AirNow update weekly; you may see stale data during outbreaks
+- **Google Places/Pollen are optional keyed APIs** — without keys, the app uses OpenStreetMap and Open-Meteo fallbacks
+- **Open-Meteo pollen data is modeled** — species coverage varies by region
+- **Overpass queries can be slow** — results are cached for 24h locally when Google Places is unavailable
+- **No real-time disease data** — CDC respiratory datasets update weekly, so rapidly changing outbreaks may lag
 
 ## Privacy
 
 - **No tracking** — all computation happens in your browser
-- **No data sent to our servers** — only to public APIs (Nominatim, AirNow, Open-Meteo, CDC, Overpass)
+- **No data sent to our servers** — only to configured/public APIs (Nominatim, AirNow, Open-Meteo, CDC, Google APIs, Overpass)
 - **Results stored locally** — settings and alert thresholds saved in `localStorage`; clear your browser cache to reset
 
 ## Accessibility

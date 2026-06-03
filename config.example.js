@@ -4,4 +4,6 @@
 // IMPORTANT: Before deploying publicly, restrict your Google Maps key to your domain
 // in Google Cloud Console → APIs & Services → Credentials → Edit key → HTTP referrers
 window.GOOGLE_MAPS_KEY = '';
+window.GOOGLE_PLACES_KEY = '';
+window.GOOGLE_POLLEN_KEY = '';
 window.AIRNOW_KEY = '';

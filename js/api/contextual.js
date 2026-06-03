@@ -40,36 +40,35 @@ export function getAirQualityContext(airResult, geo) {
 export function getInfectionRiskContext(infResult, geo) {
   const insights = [];
 
-  // Vaccination hotspot vs coldspot
-  const { vaxRate } = infResult?.sub || {};
-  if (vaxRate) {
-    if (vaxRate >= 70) {
-      insights.push({
-        icon: '💉',
-        title: 'High Community Immunity',
-        text: `${vaxRate.toFixed(0)}% vaccination rate provides strong herd immunity. Outbreaks are rarer in this region.`
-      });
-    } else if (vaxRate < 50) {
-      insights.push({
-        icon: '⚠️',
-        title: 'Lower Vaccination Coverage',
-        text: `${vaxRate.toFixed(0)}% vaccination rate is below CDC targets. Disease spread risk is elevated during outbreaks.`
-      });
-    }
+  const { ariLevel, combinedHospRate } = infResult?.sub || {};
+  if (ariLevel && !['Very Low', 'Low', 'Data Unavailable'].includes(ariLevel)) {
+    insights.push({
+      icon: '⚠️',
+      title: 'Elevated Respiratory Activity',
+      text: `CDC reports ${ariLevel.toLowerCase()} acute respiratory illness activity in this state. Consider masking in crowded indoor spaces and avoiding high-risk events.`
+    });
+  }
+
+  if (combinedHospRate != null && combinedHospRate >= 5) {
+    insights.push({
+      icon: '🏥',
+      title: 'Hospitalization Burden',
+      text: `Combined respiratory hospitalizations are ${combinedHospRate.toFixed(1)} per 100,000 this week, indicating meaningful severe disease burden.`
+    });
   }
 
   // Seasonal flu pattern guidance
   insights.push({
     icon: '🌡️',
     title: 'Flu Season Timeline',
-    text: `Northern US: Oct–Feb. Southern US: Dec–Mar. Track CDC FluView for real-time ILI activity in your region.`
+    text: `Northern US: Oct–Feb. Southern US: Dec–Mar. Track CDC respiratory illness activity for current state-level trends.`
   });
 
   return insights;
 }
 
 export function getHealthcareContext(hcResult, geo) {
-  const { hospitalCount, hasSpecialist } = hcResult?.sub || {};
+  const { hospitalCount, hasSpecialist, nearestHospitalKm, nearestHospitalName } = hcResult?.sub || {};
   const insights = [];
 
   if (!hasSpecialist) {
@@ -86,11 +85,23 @@ export function getHealthcareContext(hcResult, geo) {
     });
   }
 
-  if (hospitalCount >= 5) {
+  if (nearestHospitalKm != null && nearestHospitalKm <= 20) {
+    insights.push({
+      icon: '🏥',
+      title: 'Adjacent-Area Hospital Access',
+      text: `${nearestHospitalName || 'The nearest hospital'} is ${nearestHospitalKm.toFixed(1)} km away. Nearby hospitals count even when they are outside the searched city or ZIP code.`
+    });
+  } else if (nearestHospitalKm != null) {
+    insights.push({
+      icon: '🚑',
+      title: 'Longer Hospital Travel',
+      text: `The nearest hospital found is ${nearestHospitalKm.toFixed(1)} km away. Plan for longer emergency travel and keep medical records accessible.`
+    });
+  } else if (hospitalCount >= 5) {
     insights.push({
       icon: '🏥',
       title: 'Multiple Hospital Options',
-      text: `${hospitalCount} hospitals within 10 km gives you choice and backup options in case your preferred hospital is at capacity.`
+      text: `${hospitalCount} hospitals within the wider search area gives you choice and backup options in case your preferred hospital is at capacity.`
     });
   } else if (hospitalCount === 0) {
     insights.push({

@@ -10,6 +10,7 @@
     img-src 'self' https://maps.googleapis.com https://places.googleapis.com https://lh3.googleusercontent.com https://upload.wikimedia.org https://commons.wikimedia.org https://*.arcgisonline.com https://*.tile.openstreetmap.org data:;
     connect-src 'self'
       https://places.googleapis.com
+      https://pollen.googleapis.com
       https://*.arcgisonline.com
       https://*.tile.openstreetmap.org
       https://nominatim.openstreetmap.org
@@ -69,7 +70,7 @@
         <p class="hero-sub">Enter any city or ZIP code to get an evidence-based risk assessment for immunocompromised individuals.</p>
         <div class="search-wrap" role="search">
           <label for="search-input" class="sr-only">Search city or ZIP code</label>
-          <div class="search-input-group">
+          <form id="search-form" class="search-input-group" role="search">
             <svg class="search-icon" aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 11.5L16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             <input
               id="search-input"
@@ -82,8 +83,8 @@
               aria-controls="search-suggestions"
               aria-expanded="false"
             />
-            <button id="btn-search" type="button" aria-label="Search">Search</button>
-          </div>
+            <button id="btn-search" type="submit" aria-label="Search">Search</button>
+          </form>
           <ul id="search-suggestions" class="suggestions-list" role="listbox" aria-label="Location suggestions" hidden></ul>
         </div>
       </div>
@@ -213,8 +214,21 @@
     <!-- Compare Section -->
     <section id="compare-section" class="compare-section" aria-label="Location comparison" hidden>
       <div class="compare-inner">
-        <h2>Compare Locations</h2>
+        <div class="compare-head">
+          <div>
+            <h2>Compare Regions</h2>
+            <p>Compare the current result against another city or ZIP code.</p>
+          </div>
+          <button type="button" id="compare-clear" class="secondary-btn">Clear</button>
+        </div>
+        <div class="compare-search">
+          <label for="compare-location-input" class="sr-only">Second city or ZIP code</label>
+          <input id="compare-location-input" type="text" placeholder="Second city or ZIP code" autocomplete="off" />
+          <button type="button" id="compare-search-btn">Compare</button>
+        </div>
+        <p id="compare-status" class="compare-status" aria-live="polite"></p>
         <div id="compare-grid" class="compare-grid"></div>
+        <div id="compare-table" class="compare-table" aria-label="Score comparison"></div>
       </div>
     </section>
   </main>

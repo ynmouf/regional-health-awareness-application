@@ -4,6 +4,7 @@ const DEBOUNCE_MS = 400;
 
 export function initSearch(onSearch) {
   const input = document.getElementById('search-input');
+  const form = document.getElementById('search-form');
   const btn = document.getElementById('btn-search');
   const list = document.getElementById('search-suggestions');
 
@@ -34,7 +35,10 @@ export function initSearch(onSearch) {
     }
   });
 
-  btn.addEventListener('click', () => submitSearch(input.value.trim()));
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    submitSearch(input.value.trim());
+  });
 
   // Close on outside click
   document.addEventListener('click', e => {

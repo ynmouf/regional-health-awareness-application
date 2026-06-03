@@ -6,7 +6,7 @@ const HIST_BASE = 'https://archive-api.open-meteo.com/v1/archive';
 
 /* Air quality: AQI, PM2.5, PM10, pollen */
 export async function fetchAirQuality(lat, lon) {
-  const key = `om_aq_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const key = `om_aq_v2_${lat.toFixed(2)}_${lon.toFixed(2)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
@@ -19,8 +19,7 @@ export async function fetchAirQuality(lat, lon) {
     const d = await res.json();
     const h = d.hourly;
 
-    // Use current hour index
-    const nowIdx = new Date().getHours();
+    const nowIdx = currentHourlyIndex(d.hourly.time, d.utc_offset_seconds);
     const aqi = firstValid(h.us_aqi, nowIdx);
     const pm25 = firstValid(h.pm2_5, nowIdx);
     const pm10 = firstValid(h.pm10, nowIdx);
@@ -28,18 +27,18 @@ export async function fetchAirQuality(lat, lon) {
     const ragweedPollen = firstValid(h.ragweed_pollen, nowIdx);
     const birchPollen = firstValid(h.birch_pollen, nowIdx);
 
-    // Max pollen value across types → pollen level label
-    const maxPollen = Math.max(grassPollen ?? 0, ragweedPollen ?? 0, birchPollen ?? 0);
+    const pollenValues = [grassPollen, ragweedPollen, birchPollen].filter(v => v != null && !isNaN(v));
+    const maxPollen = pollenValues.length ? Math.max(...pollenValues) : null;
 
     const result = {
-      aqi: aqi ?? 0,
-      pm25: pm25 ?? 0,
-      pm10: pm10 ?? 0,
+      aqi: aqi ?? null,
+      pm25: pm25 ?? null,
+      pm10: pm10 ?? null,
       pollenRaw: maxPollen,
       pollenLevel: pollenLabel(maxPollen),
       grassPollen, ragweedPollen, birchPollen,
       source: 'Open-Meteo',
-      confidence: aqi != null ? 'medium' : 'low',
+      confidence: aqi != null || pm25 != null ? 'medium' : 'low',
       timestamp: new Date().toISOString(),
     };
     cacheSet(key, result, 2 * 60 * 60 * 1000);
@@ -49,7 +48,7 @@ export async function fetchAirQuality(lat, lon) {
 
 /* Weather: humidity, temperature extremes */
 export async function fetchWeather(lat, lon) {
-  const key = `om_wx_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const key = `om_wx_v2_${lat.toFixed(2)}_${lon.toFixed(2)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
@@ -62,7 +61,8 @@ export async function fetchWeather(lat, lon) {
     const d = await res.json();
 
     // Average humidity over next 24h
-    const humiditySlice = d.hourly.relativehumidity_2m.slice(0, 24);
+    const startIdx = Math.max(0, currentHourlyIndex(d.hourly.time, d.utc_offset_seconds));
+    const humiditySlice = d.hourly.relativehumidity_2m.slice(startIdx, startIdx + 24);
     const avgHumidity = avg(humiditySlice);
 
     // 7-day average daily temp range
@@ -70,13 +70,13 @@ export async function fetchWeather(lat, lon) {
       (max, i) => max - d.daily.temperature_2m_min[i]
     );
     const avgTempRange = avg(tempRanges);
-    const maxTemp = Math.max(...d.daily.temperature_2m_max);
-    const minTemp = Math.min(...d.daily.temperature_2m_min);
+    const maxTemp = maxValid(d.daily.temperature_2m_max);
+    const minTemp = minValid(d.daily.temperature_2m_min);
 
     const result = {
       avgHumidity, avgTempRange, maxTemp, minTemp,
       source: 'Open-Meteo',
-      confidence: 'medium',
+      confidence: avgHumidity != null || avgTempRange != null ? 'medium' : 'low',
       timestamp: new Date().toISOString(),
     };
     cacheSet(key, result, 6 * 60 * 60 * 1000);
@@ -86,7 +86,7 @@ export async function fetchWeather(lat, lon) {
 
 /* Historical monthly data for seasonal calendar — returns array of 12 monthly scores */
 export async function fetchSeasonalHistory(lat, lon) {
-  const key = `om_hist_${lat.toFixed(1)}_${lon.toFixed(1)}`;
+  const key = `om_hist_v2_${lat.toFixed(1)}_${lon.toFixed(1)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
@@ -133,6 +133,7 @@ export async function fetchSeasonalHistory(lat, lon) {
 }
 
 function firstValid(arr, startIdx) {
+  if (!Array.isArray(arr)) return null;
   for (let i = startIdx; i >= 0; i--) {
     if (arr[i] != null) return arr[i];
   }
@@ -140,8 +141,51 @@ function firstValid(arr, startIdx) {
 }
 
 function avg(arr) {
+  if (!Array.isArray(arr)) return null;
   const valid = arr.filter(v => v != null && !isNaN(v));
-  return valid.length ? valid.reduce((s, v) => s + v, 0) / valid.length : 0;
+  return valid.length ? valid.reduce((s, v) => s + v, 0) / valid.length : null;
+}
+
+function currentHourlyIndex(times, utcOffsetSeconds = 0) {
+  if (!Array.isArray(times) || !times.length) return 0;
+  const localNow = new Date(Date.now() + (utcOffsetSeconds || 0) * 1000);
+  const target = `${localNow.getUTCFullYear()}-${pad2(localNow.getUTCMonth() + 1)}-${pad2(localNow.getUTCDate())}T${pad2(localNow.getUTCHours())}:00`;
+  const exactIdx = times.indexOf(target);
+  if (exactIdx >= 0) return exactIdx;
+
+  const now = parseOpenMeteoLocalTime(target);
+  let bestIdx = 0;
+  let bestDiff = Infinity;
+  times.forEach((time, i) => {
+    const t = parseOpenMeteoLocalTime(time);
+    if (!Number.isFinite(t)) return;
+    const diff = Math.abs(now - t);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIdx = i;
+    }
+  });
+  return bestIdx;
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function parseOpenMeteoLocalTime(time) {
+  const str = String(time);
+  if (str.endsWith('Z')) return Date.parse(str);
+  return Date.parse(`${str.length === 16 ? `${str}:00` : str}Z`);
+}
+
+function maxValid(arr) {
+  const valid = Array.isArray(arr) ? arr.filter(v => v != null && !isNaN(v)) : [];
+  return valid.length ? Math.max(...valid) : null;
+}
+
+function minValid(arr) {
+  const valid = Array.isArray(arr) ? arr.filter(v => v != null && !isNaN(v)) : [];
+  return valid.length ? Math.min(...valid) : null;
 }
 
 function pollenLabel(val) {

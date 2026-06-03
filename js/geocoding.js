@@ -3,6 +3,22 @@ import { sessionGet, sessionSet } from './utils/cache.js';
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 const ZIPPOPOTAM = 'https://api.zippopotam.us/us';
 
+const STATE_ABBR = {
+  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA',
+  Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE', 'District of Columbia': 'DC',
+  Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL',
+  Indiana: 'IN', Iowa: 'IA', Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA',
+  Maine: 'ME', Maryland: 'MD', Massachusetts: 'MA', Michigan: 'MI',
+  Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO', Montana: 'MT',
+  Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC',
+  'North Dakota': 'ND', Ohio: 'OH', Oklahoma: 'OK', Oregon: 'OR',
+  Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+  'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT',
+  Vermont: 'VT', Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV',
+  Wisconsin: 'WI', Wyoming: 'WY',
+};
+
 /* Returns { lat, lon, displayName, countryCode, state } or throws */
 export async function geocode(query) {
   const q = query.trim();
@@ -30,7 +46,7 @@ export async function geocode(query) {
     displayName: formatDisplayName(place),
     countryCode: place.address?.country_code?.toUpperCase() ?? '',
     state: place.address?.state ?? '',
-    stateCode: place.address?.['ISO3166-2-lvl4']?.split('-')[1] ?? '',
+    stateCode: stateCode(place.address),
   };
   sessionSet(cacheKey, result);
   return result;
@@ -65,7 +81,7 @@ export async function suggest(query) {
       lon: parseFloat(p.lon),
       countryCode: p.address?.country_code?.toUpperCase() ?? '',
       state: p.address?.state ?? '',
-      stateCode: p.address?.['ISO3166-2-lvl4']?.split('-')[1] ?? '',
+      stateCode: stateCode(p.address),
     }));
   } catch { return []; }
 }
@@ -78,4 +94,11 @@ function formatDisplayName(place) {
   if (city && state && country === 'US') return `${city}, ${state}`;
   if (city && state) return `${city}, ${state}, ${a.country}`;
   return place.display_name.split(',').slice(0, 3).join(',').trim();
+}
+
+function stateCode(address = {}) {
+  return address.state_code ||
+    address['ISO3166-2-lvl4']?.split('-')[1] ||
+    STATE_ABBR[address.state] ||
+    '';
 }
