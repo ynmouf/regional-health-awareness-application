@@ -1,5 +1,5 @@
 import { scoreColor } from '../scoring.js';
-import { getAirQualityContext, getInfectionRiskContext, getHealthcareContext, getClimateContext } from '../api/contextual.js';
+import { getAirQualityContext, getHealthcareContext, getClimateContext } from '../api/contextual.js';
 
 const TOOLTIPS = {
   aqi: 'The Air Quality Index summarises how clean the air is. Values above 100 are considered unhealthy for sensitive groups including immunocompromised individuals.',
@@ -44,45 +44,34 @@ const CATEGORIES = {
       },
     ].filter(Boolean),
   },
-  infection: {
-    title: '🦠 Infectious Disease Risk',
-    source: 'CDC ARI Activity and RESP-NET (data.cdc.gov)',
-    sourceUrl: 'https://data.cdc.gov/Public-Health-Surveillance/Level-of-Acute-Respiratory-Illness-ARI-Activity-by/f3zz-zga5',
+  water: {
+    title: '💧 Drinking Water Safety',
+    source: 'EPA Safe Drinking Water Information System (SDWIS)',
+    sourceUrl: 'https://www.epa.gov/ground-water-and-drinking-water',
     metrics: (sub) => [
-      sub.ariLevel && {
-        name: 'Acute Respiratory Illness Activity', value: sub.ariLevel,
-        display: sub.ariLevel,
-        score: sub.ariScore, tooltip: TOOLTIPS.ari,
+      sub.healthViolations5yr != null && {
+        name: 'Health-Based Violations (5 Years)', value: sub.healthViolations5yr,
+        display: `${sub.healthViolations5yr} violation${sub.healthViolations5yr !== 1 ? 's' : ''}`,
+        score: sub.violationScore,
+        tooltip: 'Count of Maximum Contaminant Level (MCL) and other health-based violations in the last 5 years for public water systems serving this area. Immunocompromised people face severe risk from contaminants that healthy immune systems manage without symptoms.',
       },
-      sub.combinedHospRate != null && {
-        name: 'Combined Respiratory Hospitalization Rate', value: sub.combinedHospRate,
-        display: `${sub.combinedHospRate.toFixed(1)} per 100,000 per week`,
-        score: sub.combinedHospScore, tooltip: TOOLTIPS.respHosp,
+      sub.tier1Count != null && {
+        name: 'Acute Risk Violations (Tier 1)', value: sub.tier1Count,
+        display: sub.tier1Count === 0 ? 'None found ✓' : `${sub.tier1Count} acute-risk violation${sub.tier1Count !== 1 ? 's' : ''}`,
+        score: sub.tier1Score,
+        tooltip: 'Tier 1 public notifications are required when there is an immediate risk to public health — including bacteria (E. coli, coliforms), nitrites, and other acute contaminants that are immediately dangerous for immunocompromised individuals.',
       },
-      sub.covidHospRate != null && {
-        name: 'COVID-19 Hospitalization Rate', value: sub.covidHospRate,
-        display: `${sub.covidHospRate.toFixed(1)} per 100,000 per week`,
-        score: sub.pathogenHospScore, tooltip: TOOLTIPS.pathogenHosp,
+      sub.outstandingPct != null && {
+        name: 'Outstanding Performer Systems', value: sub.outstandingPct,
+        display: `${sub.outstandingPct}% of local systems are EPA Outstanding Performers`,
+        score: sub.outstandingScore,
+        tooltip: 'EPA Outstanding Performers are water systems with sustained exemplary compliance records. A higher percentage indicates a well-maintained local water infrastructure.',
       },
-      sub.wastewaterPercentile != null && {
-        name: 'Wastewater Viral Activity Percentile', value: sub.wastewaterPercentile,
-        display: `${sub.wastewaterPercentile.toFixed(0)}th percentile${sub.wastewaterDate ? ` — ${sub.wastewaterDate}` : ''}`,
-        score: sub.wastewaterScore, tooltip: 'CDC wastewater percentiles provide community-level respiratory-virus context where reporting sites are available.',
-      },
-      sub.communityHealthScore != null && {
-        name: 'Local Respiratory Health Context', value: sub.communityHealthScore,
-        display: `${sub.communityHealthScore}/100`,
-        score: sub.communityHealthScore, tooltip: 'CDC PLACES county estimates for asthma, COPD, smoking, and insurance coverage provide local vulnerability context.',
-      },
-      sub.fluHospRate != null && {
-        name: 'Flu Hospitalization Rate', value: sub.fluHospRate,
-        display: `${sub.fluHospRate.toFixed(1)} per 100,000 per week`,
-        score: sub.pathogenHospScore, tooltip: TOOLTIPS.pathogenHosp,
-      },
-      sub.rsvHospRate != null && {
-        name: 'RSV Hospitalization Rate', value: sub.rsvHospRate,
-        display: `${sub.rsvHospRate.toFixed(1)} per 100,000 per week`,
-        score: sub.pathogenHospScore, tooltip: TOOLTIPS.pathogenHosp,
+      sub.systemCount != null && {
+        name: 'Community Water Systems Identified', value: sub.systemCount,
+        display: `${sub.systemCount} active system${sub.systemCount !== 1 ? 's' : ''} found`,
+        score: null,
+        tooltip: 'Number of active community water systems (CWS) identified for this city/ZIP. Systems serving larger populations typically have more robust monitoring and compliance programs.',
       },
     ].filter(Boolean),
   },
@@ -230,9 +219,6 @@ function buildBody(def, data) {
   let contextHtml = '';
   if (def.title.includes('Air Quality')) {
     const insights = getAirQualityContext(currentData.air, currentGeo);
-    contextHtml = buildContextSection(insights);
-  } else if (def.title.includes('Infection')) {
-    const insights = getInfectionRiskContext(currentData.infection, currentGeo);
     contextHtml = buildContextSection(insights);
   } else if (def.title.includes('Healthcare')) {
     const insights = getHealthcareContext(currentData.healthcare, currentGeo);

@@ -40,14 +40,17 @@ export async function geocode(query) {
   if (!data.length) throw new Error(`Location not found: "${q}"`);
 
   const place = data[0];
+  const a = place.address ?? {};
   const result = {
     lat: parseFloat(place.lat),
     lon: parseFloat(place.lon),
     displayName: formatDisplayName(place),
-    countryCode: place.address?.country_code?.toUpperCase() ?? '',
-    state: place.address?.state ?? '',
-    stateCode: stateCode(place.address),
-    county: place.address?.county ?? place.address?.city ?? '',
+    countryCode: a.country_code?.toUpperCase() ?? '',
+    state: a.state ?? '',
+    stateCode: stateCode(a),
+    county: a.county ?? a.city ?? '',
+    city: a.city || a.town || a.village || a.municipality || '',
+    zipCode: a.postcode ?? '',
   };
   sessionSet(cacheKey, result);
   return result;
@@ -66,6 +69,8 @@ async function geocodeZip(zip) {
     state: place.state,
     stateCode: place['state abbreviation'],
     county: '',
+    city: place['place name'],
+    zipCode: zip,
   };
 }
 

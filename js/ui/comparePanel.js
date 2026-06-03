@@ -1,9 +1,10 @@
 import { scoreColor, scoreLabel } from '../scoring.js';
+import { suggest } from '../geocoding.js';
 
 const FACTORS = [
   { key: 'overall', label: 'Overall' },
   { key: 'air', label: 'Air Quality' },
-  { key: 'infection', label: 'Infection Risk' },
+  { key: 'water', label: 'Water Safety' },
   { key: 'healthcare', label: 'Healthcare' },
   { key: 'climate', label: 'Climate & Allergens' },
 ];
@@ -12,14 +13,91 @@ let primary = null;
 let secondary = null;
 let searchHandler = null;
 
+const DEBOUNCE_MS = 400;
+let debounceTimer = null;
+let currentSuggestions = [];
+let selectedIdx = -1;
+
 export function initComparePanel(onSearch) {
   searchHandler = onSearch;
 
+  const input = document.getElementById('compare-location-input');
+  const list  = document.getElementById('compare-suggestions');
+
   document.getElementById('compare-search-btn').addEventListener('click', runSecondarySearch);
-  document.getElementById('compare-location-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') runSecondarySearch();
-  });
   document.getElementById('compare-clear').addEventListener('click', clearCompare);
+
+  // Debounced autocomplete
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) { hideSuggestions(); return; }
+    debounceTimer = setTimeout(() => fetchSuggestions(q), DEBOUNCE_MS);
+  });
+
+  // Keyboard navigation
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(-1); }
+    else if (e.key === 'Escape') { hideSuggestions(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIdx >= 0 && currentSuggestions[selectedIdx]) {
+        selectSuggestion(currentSuggestions[selectedIdx]);
+      } else {
+        runSecondarySearch();
+      }
+    }
+  });
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.compare-input-wrap')) hideSuggestions();
+  });
+
+  async function fetchSuggestions(q) {
+    const results = await suggest(q);
+    currentSuggestions = results;
+    selectedIdx = -1;
+    if (!results.length) { hideSuggestions(); return; }
+
+    list.innerHTML = '';
+    results.forEach((r, i) => {
+      const li = document.createElement('li');
+      li.className = 'suggestion-item';
+      li.setAttribute('role', 'option');
+      li.dataset.idx = i;
+      li.innerHTML = `<svg class="suggestion-icon" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.3"/></svg>${escHtml(r.label)}`;
+      li.addEventListener('mousedown', e => { e.preventDefault(); selectSuggestion(r); });
+      list.appendChild(li);
+    });
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function selectSuggestion(suggestion) {
+    input.value = suggestion.label;
+    hideSuggestions();
+    runSecondarySearchWith(suggestion.label);
+  }
+
+  function hideSuggestions() {
+    list.hidden = true;
+    list.innerHTML = '';
+    input.setAttribute('aria-expanded', 'false');
+    selectedIdx = -1;
+    currentSuggestions = [];
+  }
+
+  function moveFocus(dir) {
+    const items = list.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+    items[selectedIdx]?.removeAttribute('aria-selected');
+    selectedIdx = Math.max(0, Math.min(items.length - 1, selectedIdx + dir));
+    items[selectedIdx].setAttribute('aria-selected', 'true');
+    items[selectedIdx].scrollIntoView({ block: 'nearest' });
+    input.value = currentSuggestions[selectedIdx].label;
+  }
 }
 
 export function openCompare(result) {
@@ -38,6 +116,21 @@ export function clearCompare() {
   secondary = null;
   document.getElementById('compare-section').hidden = true;
   setCompareStatus('');
+}
+
+async function runSecondarySearchWith(query) {
+  if (!query || !primary || !searchHandler) return;
+  setCompareStatus('Comparing region...');
+  document.getElementById('compare-search-btn').disabled = true;
+  try {
+    secondary = await searchHandler(query);
+    renderCompare();
+    setCompareStatus('');
+  } catch (err) {
+    setCompareStatus(err.message || 'Could not compare that region.');
+  } finally {
+    document.getElementById('compare-search-btn').disabled = false;
+  }
 }
 
 async function runSecondarySearch() {

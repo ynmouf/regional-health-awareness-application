@@ -81,6 +81,64 @@ export function scoreInfection(cdc, wastewater = null, localHealth = null) {
   };
 }
 
+/**
+ * Drinking Water Safety — EPA SDWIS (data.epa.gov/efservice)
+ * Scores 0–100 (100 = safest water).
+ * Based on health-based violations and acute-risk incidents reported to the EPA.
+ */
+export function scoreWaterSafety(waterData) {
+  if (!waterData) return { score: 50, sub: {}, confidence: 'low' };
+
+  const { healthViolations5yr, tier1Count, outstandingPct } = waterData;
+
+  // Violation count score (fewer = better)
+  const violationScore = (() => {
+    const n = healthViolations5yr ?? 0;
+    if (n === 0) return 100;
+    if (n <= 2)  return 85;
+    if (n <= 5)  return 70;
+    if (n <= 10) return 50;
+    if (n <= 20) return 30;
+    return 15;
+  })();
+
+  // Tier 1 acute-risk penalty
+  const tier1Score = (() => {
+    const t = tier1Count ?? 0;
+    if (t === 0) return 100;
+    if (t === 1) return 60;
+    if (t <= 3)  return 30;
+    return 10;
+  })();
+
+  // Outstanding performer bonus
+  const outstandingScore = outstandingPct != null
+    ? Math.min(100, 60 + outstandingPct * 0.4)
+    : null;
+
+  const parts = [
+    [violationScore,   0.55],
+    [tier1Score,       0.35],
+    [outstandingScore, 0.10],
+  ];
+
+  let score = 0, total = 0;
+  for (const [val, w] of parts) {
+    if (val != null) { score += val * w; total += w; }
+  }
+  if (total === 0) return { score: 50, sub: {}, confidence: 'low' };
+
+  return {
+    score: clamp(Math.round(score / total)),
+    sub: {
+      violationScore, tier1Score, outstandingScore,
+      healthViolations5yr, tier1Count, outstandingPct,
+      systemCount: waterData.systemCount,
+    },
+    confidence: waterData.confidence ?? 'medium',
+  };
+}
+
 export function scoreHealthcare(overpass, cmsQuality = null) {
   if (!overpass || (overpass.hospitalCount == null && overpass.nearestHospitalKm == null)) return { score: 50, sub: {}, confidence: 'low' };
 
@@ -158,22 +216,21 @@ export function scoreClimate(weather, openMeteo, seasonal = null) {
 }
 
 export function scoreOverall(scores, weights) {
-  const { air, infection, healthcare, climate } = scores;
+  const { air, water, healthcare, climate } = scores;
   const w = normalizeWeights(weights);
-  const overall = Math.round(
+  return clamp(Math.round(
     air * w.air +
-    infection * w.infection +
+    water * w.water +
     healthcare * w.healthcare +
     climate * w.climate
-  );
-  return clamp(overall);
+  ));
 }
 
 export function buildRiskAssessment({ scores, categoryResults, data = {}, geo = {}, weights, profile }) {
   const base = scoreOverall(scores, weights);
   const confidences = {
     air: categoryResults.air.confidence,
-    infection: categoryResults.infection.confidence,
+    water: categoryResults.water.confidence,
     healthcare: categoryResults.healthcare.confidence,
     climate: categoryResults.climate.confidence,
   };
@@ -225,10 +282,10 @@ export function monthlyRiskScore(monthData) {
 }
 
 export function normalizeWeights(w) {
-  const total = w.air + w.infection + w.healthcare + w.climate;
+  const total = w.air + w.water + w.healthcare + w.climate;
   return {
     air: w.air / total,
-    infection: w.infection / total,
+    water: w.water / total,
     healthcare: w.healthcare / total,
     climate: w.climate / total,
   };
@@ -404,7 +461,7 @@ function buildRedFlags({ categoryResults, data, geo, profile }) {
     penalty: Math.round(penalty * sensitivity),
   });
   const air = categoryResults.air.sub;
-  const infection = categoryResults.infection.sub;
+  const water = categoryResults.water.sub;
   const healthcare = categoryResults.healthcare.sub;
   const climate = categoryResults.climate.sub;
 
@@ -413,10 +470,10 @@ function buildRedFlags({ categoryResults, data, geo, profile }) {
   if (['High', 'Very High'].includes(air.pollenLevel)) add('medium', 'Pollen is elevated', `${air.pollenLevel} pollen can worsen respiratory symptoms.`, 3);
   if (air.smokeScore != null && air.smokeScore < 50) add('medium', 'Wildfire-smoke tail risk', `${geo.stateCode || 'This region'} has meaningful seasonal smoke exposure risk.`, 5);
 
-  if (['High', 'Very High'].includes(infection.ariLevel)) add('high', 'Respiratory illness activity is high', `CDC ARI level is ${infection.ariLevel}.`, 8);
-  if (infection.combinedHospRate >= 5) add('high', 'Respiratory hospitalization burden', `${infection.combinedHospRate.toFixed(1)} hospitalizations per 100k per week.`, 7);
-  if (infection.wastewaterPercentile >= 75) add('medium', 'Wastewater signal elevated', `Average wastewater percentile is ${infection.wastewaterPercentile.toFixed(0)}.`, 5);
-  if (infection.asthmaRate >= 11 || infection.copdRate >= 8) add('medium', 'Local respiratory vulnerability', 'CDC PLACES indicates elevated chronic respiratory burden locally.', 3);
+  // Water safety red flags (EPA SDWIS violations)
+  if (water.tier1Count > 0) add('high', 'Acute-risk water violation in last 5 years', `${water.tier1Count} Tier 1 public notification${water.tier1Count !== 1 ? 's' : ''} issued — immediate health risk events reported.`, 9);
+  if (water.healthViolations5yr >= 5) add('high', 'Multiple water safety violations', `${water.healthViolations5yr} health-based violations in the last 5 years.`, 7);
+  if (water.healthViolations5yr >= 1 && water.healthViolations5yr < 5) add('medium', 'Recent drinking water violation', `${water.healthViolations5yr} health-based violation${water.healthViolations5yr !== 1 ? 's' : ''} reported in last 5 years.`, 5);
 
   if (healthcare.estimatedHospitalDriveMinutes >= 35) add('high', 'Long emergency travel time', `Estimated hospital drive time is ${healthcare.estimatedHospitalDriveMinutes} minutes.`, 8);
   if (healthcare.hospitalCount <= 1) add('medium', 'Limited hospital redundancy', 'Few hospital options were found in the wider search area.', 4);
@@ -445,7 +502,7 @@ function confidenceLabel(value) {
 }
 
 function labelForCategory(key) {
-  return { air: 'Air quality', infection: 'Infection', healthcare: 'Healthcare', climate: 'Climate' }[key] ?? key;
+  return { air: 'Air quality', water: 'Water safety', healthcare: 'Healthcare', climate: 'Climate' }[key] ?? key;
 }
 
 function severityRank(severity) {

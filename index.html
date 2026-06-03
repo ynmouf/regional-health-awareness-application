@@ -9,6 +9,7 @@
     script-src 'self' https://cdn.jsdelivr.net https://unpkg.com;
     img-src 'self' https://maps.googleapis.com https://places.googleapis.com https://lh3.googleusercontent.com https://upload.wikimedia.org https://commons.wikimedia.org https://*.arcgisonline.com https://*.tile.openstreetmap.org data:;
     connect-src 'self'
+      https://data.epa.gov
       https://places.googleapis.com
       https://pollen.googleapis.com
       https://*.arcgisonline.com
@@ -166,19 +167,19 @@
             <button class="card-details-btn" data-target="air" aria-expanded="false">View details</button>
           </article>
 
-          <article class="category-card" id="card-infection" role="listitem" tabindex="0" aria-label="Infection Risk score">
+          <article class="category-card" id="card-water" role="listitem" tabindex="0" aria-label="Water Safety score">
             <div class="card-header">
-              <div class="card-icon infection-icon" aria-hidden="true">🦠</div>
+              <div class="card-icon water-icon" aria-hidden="true">💧</div>
               <div>
-                <h3 class="card-title">Infection Risk</h3>
-                <span class="confidence-badge" id="conf-infection"></span>
+                <h3 class="card-title">Water Safety</h3>
+                <span class="confidence-badge" id="conf-water"></span>
               </div>
-              <span class="card-score" id="score-infection">—</span>
+              <span class="card-score" id="score-water">—</span>
             </div>
-            <div class="card-bar-wrap"><div class="card-bar" id="bar-infection"></div></div>
-            <p class="card-summary" id="summary-infection"></p>
-            <p class="card-data-confidence" id="data-conf-infection"></p>
-            <button class="card-details-btn" data-target="infection" aria-expanded="false">View details</button>
+            <div class="card-bar-wrap"><div class="card-bar" id="bar-water"></div></div>
+            <p class="card-summary" id="summary-water"></p>
+            <p class="card-data-confidence" id="data-conf-water"></p>
+            <button class="card-details-btn" data-target="water" aria-expanded="false">View details</button>
           </article>
 
           <article class="category-card" id="card-healthcare" role="listitem" tabindex="0" aria-label="Healthcare Access score">
@@ -241,7 +242,10 @@
         </div>
         <div class="compare-search">
           <label for="compare-location-input" class="sr-only">Second city or ZIP code</label>
-          <input id="compare-location-input" type="text" placeholder="Second city or ZIP code" autocomplete="off" />
+          <div class="compare-input-wrap">
+            <input id="compare-location-input" type="text" placeholder="Second city or ZIP code" autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-controls="compare-suggestions" aria-expanded="false" />
+            <ul id="compare-suggestions" class="suggestions-list" role="listbox" aria-label="Location suggestions" hidden></ul>
+          </div>
           <button type="button" id="compare-search-btn">Compare</button>
         </div>
         <p id="compare-status" class="compare-status" aria-live="polite"></p>
@@ -291,9 +295,9 @@
           <span class="weight-pct" id="pct-air">25%</span>
         </div>
         <div class="weight-row">
-          <label for="w-infection">🦠 Infection Risk</label>
-          <input type="range" id="w-infection" min="5" max="70" value="30" data-factor="infection" aria-label="Infection risk weight" />
-          <span class="weight-pct" id="pct-infection">30%</span>
+          <label for="w-water">💧 Water Safety</label>
+          <input type="range" id="w-water" min="5" max="70" value="30" data-factor="water" aria-label="Drinking water safety weight" />
+          <span class="weight-pct" id="pct-water">30%</span>
         </div>
         <div class="weight-row">
           <label for="w-healthcare">🏥 Healthcare Access</label>

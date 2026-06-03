@@ -94,9 +94,9 @@ function escAttr(str) {
 export function renderRadarChart(scores) {
   const ctx = document.getElementById('radar-chart').getContext('2d');
   const data = {
-    labels: ['Air Quality', 'Infection Risk', 'Healthcare', 'Climate'],
+    labels: ['Air Quality', 'Toxin Burden', 'Healthcare', 'Climate'],
     datasets: [{
-      data: [scores.air, scores.infection, scores.healthcare, scores.climate],
+      data: [scores.air, scores.water, scores.healthcare, scores.climate],
       backgroundColor: 'rgba(79,110,247,.15)',
       borderColor: 'rgba(79,110,247,.8)',
       borderWidth: 2,
@@ -125,6 +125,6 @@ export function renderRadarChart(scores) {
 
 export function updateRadarChart(scores) {
   if (!radarChart) { renderRadarChart(scores); return; }
-  radarChart.data.datasets[0].data = [scores.air, scores.infection, scores.healthcare, scores.climate];
+  radarChart.data.datasets[0].data = [scores.air, scores.water, scores.healthcare, scores.climate];
   radarChart.update('active');
 }

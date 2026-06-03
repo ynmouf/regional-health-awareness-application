@@ -651,14 +651,37 @@ nav { display: flex; gap: .4rem; }
 }
 .profile-row label { min-width: 80px; font-size: .9rem; font-weight: 600; }
 .profile-row select {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  flex: 1; min-width: 0;
+  font: inherit; font-size: .9rem;
   color: var(--text);
-  padding: .5rem .6rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .5rem .75rem;
+  cursor: pointer;
+  appearance: auto;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
 }
+.profile-row select:hover { border-color: var(--accent); }
+.profile-row select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,110,247,.15);
+}
+
+/* Profile description below the selector */
+#profile-description {
+  font-size: .82rem;
+  color: var(--text-2);
+  background: var(--accent-light);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: .5rem .75rem;
+  margin-bottom: 1rem;
+  min-height: 2rem;
+  transition: opacity .2s;
+}
+#profile-description:empty { display: none; }
 
 .weight-sliders { display: flex; flex-direction: column; gap: 1.1rem; margin-bottom: 1.25rem; }
 .weight-row { display: flex; align-items: center; gap: .75rem; }
@@ -707,6 +730,15 @@ nav { display: flex; gap: .4rem; }
   display: grid; grid-template-columns: 1fr auto; gap: .75rem;
   margin-bottom: .5rem;
 }
+/* Wrapper that positions the suggestions dropdown */
+.compare-input-wrap {
+  position: relative; min-width: 0;
+}
+.compare-input-wrap .suggestions-list {
+  position: absolute; top: calc(100% + .3rem); left: 0; right: 0;
+  z-index: 200;
+}
+.compare-input-wrap input { width: 100%; }
 .compare-search input {
   min-width: 0;
   background: var(--surface-2);
