@@ -4,9 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Health Location Scorer</title>
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' https://cdn.jsdelivr.net;
+    img-src 'self' https://maps.googleapis.com https://upload.wikimedia.org https://commons.wikimedia.org data:;
+    connect-src 'self'
+      https://nominatim.openstreetmap.org
+      https://api.zippopotam.us
+      https://www.airnowapi.org
+      https://air-quality-api.open-meteo.com
+      https://api.open-meteo.com
+      https://archive-api.open-meteo.com
+      https://data.cdc.gov
+      https://overpass-api.de
+      https://commons.wikimedia.org;
+    style-src 'self' 'unsafe-inline';
+    font-src 'self';
+    object-src 'none';
+    base-uri 'self';
+    frame-ancestors 'none';
+  ">
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g" crossorigin="anonymous"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -249,6 +269,8 @@
     </div>
   </aside>
 
+  <!-- Local API keys — create config.local.js from config.example.js (gitignored) -->
+  <script src="config.local.js" onerror="void 0"></script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

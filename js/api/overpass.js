@@ -2,8 +2,19 @@ import { cacheGet, cacheSet } from '../utils/cache.js';
 
 const ENDPOINT = 'https://overpass-api.de/api/interpreter';
 
+function validateCoords(lat, lon) {
+  const la = parseFloat(lat), lo = parseFloat(lon);
+  if (!isFinite(la) || !isFinite(lo) || la < -90 || la > 90 || lo < -180 || lo > 180) {
+    throw new Error('Invalid coordinates');
+  }
+  return { lat: la, lon: lo };
+}
+
 /* Returns { hospitals, pharmacies, hasSpecialist, details } */
 export async function fetchHealthcare(lat, lon) {
+  const coords = validateCoords(lat, lon);
+  lat = coords.lat; lon = coords.lon;
+
   const key = `overpass_${lat.toFixed(2)}_${lon.toFixed(2)}`;
   const cached = cacheGet(key);
   if (cached) return cached;

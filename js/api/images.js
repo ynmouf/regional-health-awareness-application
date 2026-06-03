@@ -1,5 +1,14 @@
 import { cacheGet, cacheSet } from '../utils/cache.js';
 
+const ALLOWED_IMAGE_HOSTS = ['upload.wikimedia.org', 'commons.wikimedia.org'];
+
+function isAllowedImageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && ALLOWED_IMAGE_HOSTS.some(h => parsed.hostname === h);
+  } catch { return false; }
+}
+
 export async function fetchCityPhotos(cityName) {
   const cacheKey = `photos_${cityName.toLowerCase().replace(/\s+/g,'_')}`;
   const cached = cacheGet(cacheKey);
@@ -24,10 +33,13 @@ export async function fetchCityPhotos(cityName) {
 
     const result = [];
     for (const page of Object.values(fileData.query.pages)) {
-      if (page.imageinfo?.[0]?.url) {
+      const url = page.imageinfo?.[0]?.url;
+      const thumb = page.imageinfo?.[0]?.thumburl || url;
+      // Only accept HTTPS URLs from trusted Wikimedia domains
+      if (url && isAllowedImageUrl(url) && isAllowedImageUrl(thumb)) {
         result.push({
-          url: page.imageinfo[0].url,
-          thumb: page.imageinfo[0].thumburl || page.imageinfo[0].url,
+          url,
+          thumb,
           alt: page.title || `${cityName} image`,
           credit: 'Wikimedia Commons',
           creditUrl: 'https://commons.wikimedia.org',
