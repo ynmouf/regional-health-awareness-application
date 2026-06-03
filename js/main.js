@@ -15,6 +15,7 @@ import { renderSeasonalCalendar } from './ui/seasonalCalendar.js';
 import { renderLocationImages } from './ui/locationImages.js';
 import { addCompareResult } from './ui/comparePanel.js';
 import { fetchCityPhotos } from './api/images.js';
+import { fetchPlacePhotos } from './api/places.js';
 
 // ── State ───────────────────────────────────────────
 let weights = getWeights();
@@ -49,7 +50,8 @@ async function handleSearch(query, preResolved) {
       geo.countryCode === 'US' ? fetchCDCData(geo.stateCode) : Promise.resolve(null),
       fetchHealthcare(geo.lat, geo.lon),
       fetchSeasonalHistory(geo.lat, geo.lon),
-      fetchCityPhotos(geo.displayName),
+      // Places API first (user photos), Wikimedia as fallback
+      fetchPlacePhotos(geo.displayName, window.GOOGLE_MAPS_KEY || '').then(r => r || fetchCityPhotos(geo.displayName)),
     ]);
 
     setLoadingStatus('Calculating scores…');
