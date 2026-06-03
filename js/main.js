@@ -3,6 +3,8 @@ import { fetchAirNow } from './api/airnow.js';
 import { fetchAirQuality, fetchWeather, fetchSeasonalHistory } from './api/openmeteo.js';
 import { fetchCDCData } from './api/cdc.js';
 import { fetchHealthcare } from './api/overpass.js';
+import { fetchGoogleHealthcare } from './api/googleHealthcare.js';
+import { fetchGooglePollen, mergePollen } from './api/googlePollen.js';
 import {
   scoreAirQuality, scoreInfection, scoreHealthcare, scoreClimate,
   scoreOverall, scoreLabel,
@@ -45,23 +47,25 @@ async function handleSearch(query, preResolved) {
 
     // Fire all API calls in parallel
     setLoadingStatus('Fetching air quality, health & climate data…');
-    const [airNow, openMeteoAQ, weather, cdc, healthcare, seasonal, photos] = await Promise.all([
+    const [airNow, openMeteoAQ, googlePollen, weather, cdc, healthcare, seasonal, photos] = await Promise.all([
       geo.countryCode === 'US' ? fetchAirNow(geo.lat, geo.lon) : Promise.resolve(null),
       fetchAirQuality(geo.lat, geo.lon),
+      fetchGooglePollen(geo.lat, geo.lon, getGooglePollenKey()),
       fetchWeather(geo.lat, geo.lon),
       geo.countryCode === 'US' ? fetchCDCData(geo.stateCode) : Promise.resolve(null),
-      fetchHealthcare(geo.lat, geo.lon),
+      fetchBestHealthcare(geo.lat, geo.lon),
       fetchSeasonalHistory(geo.lat, geo.lon),
       // Places API first (user photos), Wikimedia as fallback
-      fetchPlacePhotos(geo.displayName, window.GOOGLE_MAPS_KEY || '').then(r => r || fetchCityPhotos(geo.displayName)),
+      fetchPlacePhotos(geo.displayName, getGooglePlacesKey()).then(r => r || fetchCityPhotos(geo.displayName)),
     ]);
+    const airQuality = mergePollen(openMeteoAQ, googlePollen);
 
     setLoadingStatus('Calculating scores…');
 
-    const airResult = scoreAirQuality(airNow, openMeteoAQ);
+    const airResult = scoreAirQuality(airNow, airQuality);
     const infResult = scoreInfection(cdc);
     const hcResult  = scoreHealthcare(healthcare);
-    const clResult  = scoreClimate(weather, openMeteoAQ);
+    const clResult  = scoreClimate(weather, airQuality);
 
     const scores = {
       air: airResult.score,
@@ -75,10 +79,10 @@ async function handleSearch(query, preResolved) {
 
     // Attach raw API data for detail panel
     setDetailData({
-      air:        { sub: airResult.sub, timestamp: openMeteoAQ?.timestamp, note: geo.countryCode !== 'US' ? 'AirNow data is US-only; using Open-Meteo AQI.' : null },
-      infection:  { sub: infResult.sub, timestamp: cdc?.timestamp, note: cdc?.note ?? (geo.countryCode !== 'US' ? 'CDC disease data is US-only — not available for this location.' : null) },
-      healthcare: { sub: hcResult.sub, timestamp: healthcare?.timestamp },
-      climate:    { sub: clResult.sub, timestamp: weather?.timestamp },
+      air:        { sub: airResult.sub, timestamp: airQuality?.timestamp, source: googlePollen ? 'AirNow (EPA), Open-Meteo, and Google Pollen API' : null, note: geo.countryCode !== 'US' ? 'AirNow data is US-only; using modeled AQI.' : null },
+      infection:  { sub: infResult.sub, timestamp: cdc?.timestamp, source: cdc?.source, note: cdc?.note ?? (geo.countryCode !== 'US' ? 'CDC disease data is US-only — not available for this location.' : null) },
+      healthcare: { sub: hcResult.sub, timestamp: healthcare?.timestamp, source: healthcare?.source },
+      climate:    { sub: clResult.sub, timestamp: weather?.timestamp, source: googlePollen ? 'Open-Meteo Weather and Google Pollen API' : null },
     }, geo, seasonal);
 
     // Render
@@ -92,8 +96,12 @@ async function handleSearch(query, preResolved) {
     renderSeasonalCalendar(seasonal);
 
     const now = new Date();
+    const sources = [airNow ? 'AirNow (EPA)' : 'Open-Meteo', 'Open-Meteo'];
+    if (cdc) sources.push('CDC');
+    if (healthcare?.source) sources.push(healthcare.source);
+    if (googlePollen) sources.push('Google Pollen');
     document.getElementById('data-footnote').textContent =
-      `Data retrieved ${now.toLocaleString()} · Sources: AirNow (EPA), Open-Meteo, CDC, OpenStreetMap`;
+      `Data retrieved ${now.toLocaleString()} · Sources: ${[...new Set(sources)].join(', ')}`;
 
     showResults();
     enableHeaderButtons();
@@ -109,6 +117,19 @@ async function handleSearch(query, preResolved) {
   } finally {
     showLoading(false);
   }
+}
+
+async function fetchBestHealthcare(lat, lon) {
+  const google = await fetchGoogleHealthcare(lat, lon, getGooglePlacesKey());
+  return google || fetchHealthcare(lat, lon);
+}
+
+function getGooglePlacesKey() {
+  return window.GOOGLE_PLACES_KEY || window.GOOGLE_MAPS_KEY || '';
+}
+
+function getGooglePollenKey() {
+  return window.GOOGLE_POLLEN_KEY || window.GOOGLE_MAPS_KEY || '';
 }
 
 // ── Weight change handler ────────────────────────────
@@ -223,16 +244,17 @@ function showError(msg) {
 // ── Summary builders ─────────────────────────────────
 function airSummary(sub, airNow) {
   const source = airNow ? 'AirNow (EPA)' : 'Open-Meteo';
-  if (sub?.aqi != null) return `AQI ${sub.aqi} · PM2.5 ${sub.pm25?.toFixed(1) ?? '?'} µg/m³ · Pollen: ${sub.pollenLevel ?? 'Unknown'} (${source})`;
+  const pollenSource = sub?.pollenSource ? ` via ${sub.pollenSource}` : '';
+  if (sub?.aqi != null) return `AQI ${sub.aqi} (${source}) · PM2.5 ${sub.pm25?.toFixed(1) ?? '?'} µg/m³ · Pollen: ${sub.pollenLevel ?? 'Unknown'}${pollenSource}`;
   return `Pollen: ${sub?.pollenLevel ?? 'Unknown'} · AQI data unavailable`;
 }
 
 function infSummary(sub, cdc) {
   if (!cdc) return 'CDC data not available for this location (US only).';
   const parts = [];
-  if (sub?.fluILI != null) parts.push(`ILI ${sub.fluILI.toFixed(1)}%`);
-  if (sub?.vaxRate != null) parts.push(`Vax ${sub.vaxRate.toFixed(0)}%`);
-  if (sub?.covidHosp != null) parts.push(`COVID hosp ${sub.covidHosp.toFixed(1)}/100k`);
+  if (sub?.ariLevel) parts.push(`ARI ${sub.ariLevel}`);
+  if (sub?.combinedHospRate != null) parts.push(`Resp hosp ${sub.combinedHospRate.toFixed(1)}/100k`);
+  if (sub?.covidHospRate != null) parts.push(`COVID ${sub.covidHospRate.toFixed(1)}/100k`);
   return parts.length ? parts.join(' · ') + ' (state-level)' : 'Limited CDC data available.';
 }
 

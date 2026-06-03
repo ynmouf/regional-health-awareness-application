@@ -5,9 +5,9 @@ const TOOLTIPS = {
   aqi: 'The Air Quality Index summarises how clean the air is. Values above 100 are considered unhealthy for sensitive groups including immunocompromised individuals.',
   pm25: 'Fine particles (PM2.5) smaller than 2.5 micrometres can penetrate deep into the lungs and bloodstream. Immunocompromised people have reduced ability to fight the resulting inflammation.',
   pollen: 'Airborne pollen can trigger allergic reactions. People on immunosuppressants are often more susceptible to allergen-driven respiratory inflammation.',
-  fluILI: 'Influenza-like illness percentage measures how many doctor visits are for flu-like symptoms in your area. High values indicate active flu season — a serious risk for people with weakened immune systems.',
-  vaxRate: 'Higher community vaccination rates create "herd immunity" that protects those who cannot mount their own immune response.',
-  covidHosp: 'COVID-19 hospitalisation rate reflects current community disease burden. Even mild COVID can be severe or prolonged in immunocompromised people.',
+  ari: 'Acute respiratory illness activity reflects emergency department visits for respiratory diagnoses, including COVID-19, flu, RSV, and other respiratory infections.',
+  respHosp: 'Weekly hospitalization rates show current severe respiratory disease burden per 100,000 people. Higher values are more concerning for immunocompromised people.',
+  pathogenHosp: 'Pathogen-specific hospitalization rates separate COVID-19, flu, and RSV burden when CDC surveillance data is available.',
   hospitals: 'Proximity to hospitals matters when immune-related emergencies arise. Distance can be the difference between a manageable episode and a life-threatening delay.',
   pharmacies: 'Easy access to pharmacies ensures you can fill specialty medications without long travel, especially important during illness when driving is difficult.',
   specialist: 'Immunologists and allergists provide essential ongoing care. Lack of local specialists often means long waits and travel for routine monitoring.',
@@ -40,23 +40,33 @@ const CATEGORIES = {
   },
   infection: {
     title: '🦠 Infectious Disease Risk',
-    source: 'CDC ILINet and RESP-NET (data.cdc.gov)',
-    sourceUrl: 'https://www.cdc.gov/fluview/index.html',
+    source: 'CDC ARI Activity and RESP-NET (data.cdc.gov)',
+    sourceUrl: 'https://data.cdc.gov/Public-Health-Surveillance/Level-of-Acute-Respiratory-Illness-ARI-Activity-by/f3zz-zga5',
     metrics: (sub) => [
-      sub.fluILI != null && {
-        name: 'Flu-like Illness (ILI%)', value: sub.fluILI,
-        display: `${sub.fluILI.toFixed(1)}% of outpatient visits`,
-        score: sub.fluScore, tooltip: TOOLTIPS.fluILI,
+      sub.ariLevel && {
+        name: 'Acute Respiratory Illness Activity', value: sub.ariLevel,
+        display: sub.ariLevel,
+        score: sub.ariScore, tooltip: TOOLTIPS.ari,
       },
-      sub.vaxRate != null && {
-        name: 'Vaccination Rate', value: sub.vaxRate,
-        display: `${sub.vaxRate.toFixed(0)}% of adults vaccinated`,
-        score: sub.vaxScore, tooltip: TOOLTIPS.vaxRate,
+      sub.combinedHospRate != null && {
+        name: 'Combined Respiratory Hospitalization Rate', value: sub.combinedHospRate,
+        display: `${sub.combinedHospRate.toFixed(1)} per 100,000 per week`,
+        score: sub.combinedHospScore, tooltip: TOOLTIPS.respHosp,
       },
-      sub.covidHosp != null && {
-        name: 'COVID Hospitalization Rate', value: sub.covidHosp,
-        display: `${sub.covidHosp.toFixed(1)} per 100,000 per week`,
-        score: sub.covidScore, tooltip: TOOLTIPS.covidHosp,
+      sub.covidHospRate != null && {
+        name: 'COVID-19 Hospitalization Rate', value: sub.covidHospRate,
+        display: `${sub.covidHospRate.toFixed(1)} per 100,000 per week`,
+        score: sub.pathogenHospScore, tooltip: TOOLTIPS.pathogenHosp,
+      },
+      sub.fluHospRate != null && {
+        name: 'Flu Hospitalization Rate', value: sub.fluHospRate,
+        display: `${sub.fluHospRate.toFixed(1)} per 100,000 per week`,
+        score: sub.pathogenHospScore, tooltip: TOOLTIPS.pathogenHosp,
+      },
+      sub.rsvHospRate != null && {
+        name: 'RSV Hospitalization Rate', value: sub.rsvHospRate,
+        display: `${sub.rsvHospRate.toFixed(1)} per 100,000 per week`,
+        score: sub.pathogenHospScore, tooltip: TOOLTIPS.pathogenHosp,
       },
     ].filter(Boolean),
   },
@@ -187,7 +197,7 @@ function buildBody(def, data) {
   }
 
   const noteHtml = data.note ? `<p class="detail-source">⚠️ ${data.note}</p>` : '';
-  const sourceHtml = `<p class="detail-source">Source: <a href="${def.sourceUrl}" target="_blank" rel="noopener">${def.source}</a> · Retrieved ${formatTime(data.timestamp)}</p>`;
+  const sourceHtml = `<p class="detail-source">Source: <a href="${def.sourceUrl}" target="_blank" rel="noopener">${escHtml(data.source || def.source)}</a> · Retrieved ${formatTime(data.timestamp)}</p>`;
 
   return metricHtml + contextHtml + noteHtml + sourceHtml;
 }

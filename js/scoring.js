@@ -2,8 +2,9 @@
 
 export function scoreAirQuality(airNow, openMeteo) {
   const aqi = airNow?.aqi ?? openMeteo?.aqi ?? null;
-  const pm25 = airNow?.pm25 ?? openMeteo?.pm25 ?? null;
+  const pm25 = openMeteo?.pm25 ?? null;
   const pollenLevel = openMeteo?.pollenLevel ?? 'None';
+  const pollenSource = openMeteo?.pollenSource ?? openMeteo?.source ?? null;
 
   const aqiScore = aqi != null ? inverseAQI(aqi) : null;
   const pm25Score = pm25 != null ? inversePM25(pm25) : null;
@@ -21,7 +22,7 @@ export function scoreAirQuality(airNow, openMeteo) {
 
   return {
     score: clamp(Math.round(score)),
-    sub: { aqiScore, pm25Score, pollenScore, aqi, pm25, pollenLevel },
+    sub: { aqiScore, pm25Score, pollenScore, aqi, pm25, pollenLevel, pollenSource },
     confidence: airNow ? 'high' : 'medium',
   };
 }
@@ -29,23 +30,29 @@ export function scoreAirQuality(airNow, openMeteo) {
 export function scoreInfection(cdc) {
   if (!cdc) return { score: 50, sub: {}, confidence: 'low' };
 
-  const { fluILI, vaxRate, covidHosp } = cdc;
-  const fluScore = fluILI != null ? inverseILI(fluILI) : null;
-  const vaxScore = vaxRate != null ? vaxRateScore(vaxRate) : null;
-  const covidScore = covidHosp != null ? inverseCovidHosp(covidHosp) : null;
+  const { ariLevel, combinedHospRate, covidHospRate, fluHospRate, rsvHospRate, weekEnd } = cdc;
+  const ariScore = ariLevelScore(ariLevel);
+  const combinedHospScore = combinedHospRate != null ? inverseRespHosp(combinedHospRate) : null;
+  const pathogenScores = [covidHospRate, fluHospRate, rsvHospRate]
+    .filter(v => v != null)
+    .map(inverseRespHosp);
+  const pathogenHospScore = pathogenScores.length ? avg(pathogenScores) : null;
 
   let score = 0, total = 0;
-  const w = { flu: 0.35, vax: 0.35, covid: 0.30 };
-  if (fluScore != null) { score += fluScore * w.flu; total += w.flu; }
-  if (vaxScore != null) { score += vaxScore * w.vax; total += w.vax; }
-  if (covidScore != null) { score += covidScore * w.covid; total += w.covid; }
+  const w = { ari: 0.45, combined: 0.35, pathogens: 0.20 };
+  if (ariScore != null) { score += ariScore * w.ari; total += w.ari; }
+  if (combinedHospScore != null) { score += combinedHospScore * w.combined; total += w.combined; }
+  if (pathogenHospScore != null) { score += pathogenHospScore * w.pathogens; total += w.pathogens; }
 
-  if (total === 0) return { score: 50, sub: { fluScore, vaxScore, covidScore }, confidence: 'low' };
+  if (total === 0) return { score: 50, sub: { ariScore, combinedHospScore, pathogenHospScore }, confidence: 'low' };
 
   return {
     score: clamp(Math.round(score / total)),
-    sub: { fluScore, vaxScore, covidScore, fluILI, vaxRate, covidHosp },
-    confidence: total > 0.5 ? 'medium' : 'low',
+    sub: {
+      ariScore, combinedHospScore, pathogenHospScore,
+      ariLevel, combinedHospRate, covidHospRate, fluHospRate, rsvHospRate, weekEnd,
+    },
+    confidence: total >= 0.55 ? 'high' : 'medium',
   };
 }
 
@@ -69,6 +76,7 @@ export function scoreClimate(weather, openMeteo) {
   const humidity = weather?.avgHumidity ?? null;
   const tempRange = weather?.avgTempRange ?? null;
   const pollenLevel = openMeteo?.pollenLevel ?? 'None';
+  const pollenSource = openMeteo?.pollenSource ?? openMeteo?.source ?? null;
 
   const humScore = humidity != null ? humidityScore(humidity) : null;
   const tempScore = tempRange != null ? tempRangeScore(tempRange) : null;
@@ -84,7 +92,12 @@ export function scoreClimate(weather, openMeteo) {
 
   return {
     score: clamp(Math.round(score / total)),
-    sub: { humScore, tempScore, pollenScore, humidity, tempRange, pollenLevel },
+    sub: {
+      humScore, tempScore, pollenScore, humidity, tempRange,
+      maxTemp: weather?.maxTemp ?? null,
+      minTemp: weather?.minTemp ?? null,
+      pollenLevel, pollenSource,
+    },
     confidence: weather ? 'medium' : 'low',
   };
 }
@@ -158,23 +171,19 @@ function pollenLevelScore(level) {
   return map[level] ?? 60;
 }
 
-function inverseILI(pct) {
-  if (pct < 1) return 100;
-  if (pct < 2) return lerp(100, 80, pct - 1);
-  if (pct < 4) return lerp(80, 55, (pct - 2) / 2);
-  if (pct < 6) return lerp(55, 30, (pct - 4) / 2);
-  return Math.max(0, lerp(30, 0, (pct - 6) / 4));
+function ariLevelScore(level) {
+  const map = {
+    'Very Low': 100,
+    Low: 85,
+    Moderate: 60,
+    High: 30,
+    'Very High': 10,
+    'Data Unavailable': null,
+  };
+  return map[level] ?? null;
 }
 
-function vaxRateScore(rate) {
-  if (rate >= 70) return 100;
-  if (rate >= 60) return lerp(100, 80, (70 - rate) / 10);
-  if (rate >= 50) return lerp(80, 60, (60 - rate) / 10);
-  if (rate >= 40) return lerp(60, 40, (50 - rate) / 10);
-  return Math.max(20, lerp(40, 20, (40 - rate) / 10));
-}
-
-function inverseCovidHosp(rate) {
+function inverseRespHosp(rate) {
   if (rate < 1) return 100;
   if (rate < 5) return lerp(100, 70, (rate - 1) / 4);
   if (rate < 10) return lerp(70, 40, (rate - 5) / 5);
@@ -214,3 +223,4 @@ function tempRangeScore(range) {
 
 function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
 function clamp(n) { return Math.max(0, Math.min(100, n)); }
+function avg(arr) { return arr.reduce((sum, v) => sum + v, 0) / arr.length; }

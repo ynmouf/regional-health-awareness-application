@@ -1,30 +1,54 @@
 import { cacheGet, cacheSet } from '../utils/cache.js';
-import { STATE_TO_HHS } from '../utils/regionMap.js';
 
 const SODA = 'https://data.cdc.gov/resource';
+const ARI_DATASET = 'f3zz-zga5';
+const RESP_NET_DATASET = 'kvib-3txy';
 
-/* Fetches flu ILI%, vaccination rate, and COVID hospitalization data for a US state */
+const STATE_NAMES = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia',
+  FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',
+  IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana',
+  ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan',
+  MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana',
+  NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota',
+  OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota',
+  TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia',
+  WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+};
+
+/* Fetches current ARI activity plus RESP-NET COVID/flu/RSV hospitalization rates for a US state */
 export async function fetchCDCData(stateCode) {
   if (!stateCode) return null;
+  const stateName = STATE_NAMES[stateCode.toUpperCase()];
+  if (!stateName) return null;
 
   const cacheKey = `cdc_${stateCode}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  const [flu, vax, covid] = await Promise.allSettled([
-    fetchFluILI(stateCode),
-    fetchVaxRate(stateCode),
-    fetchCovidHospitalization(stateCode),
+  const [ari, respNet] = await Promise.allSettled([
+    fetchARIActivity(stateName),
+    fetchRespNetRates(stateName),
   ]);
 
+  const ariData = ari.status === 'fulfilled' ? ari.value : null;
+  const respData = respNet.status === 'fulfilled' ? respNet.value : {};
+
   const result = {
-    fluILI: flu.status === 'fulfilled' ? flu.value : null,
-    vaxRate: vax.status === 'fulfilled' ? vax.value : null,
-    covidHosp: covid.status === 'fulfilled' ? covid.value : null,
+    ariLevel: ariData?.level ?? null,
+    combinedHospRate: respData.combinedHospRate ?? null,
+    covidHospRate: respData.covidHospRate ?? null,
+    fluHospRate: respData.fluHospRate ?? null,
+    rsvHospRate: respData.rsvHospRate ?? null,
+    weekEnd: ariData?.weekEnd ?? respData.weekEnd ?? null,
     stateCode,
+    stateName,
     source: 'CDC (data.cdc.gov)',
-    confidence: 'medium',
-    note: 'Data reflects state-level averages, not your specific city.',
+    confidence: ariData || Object.keys(respData).length ? 'high' : 'low',
+    note: 'Data reflects state-level respiratory surveillance, not your specific city.',
     timestamp: new Date().toISOString(),
   };
 
@@ -32,54 +56,64 @@ export async function fetchCDCData(stateCode) {
   return result;
 }
 
-async function fetchFluILI(stateCode) {
+async function fetchARIActivity(stateName) {
   try {
-    // ILINet data — % of outpatient visits for influenza-like illness
-    const url = `${SODA}/u6jv-9uzb.json?$where=region_type='State' AND region='${stateCode}'&$order=week_end DESC&$limit=1`;
+    const params = new URLSearchParams({
+      '$select': 'week_end,geography,label',
+      '$where': `geography='${stateName.replace(/'/g, "''")}'`,
+      '$order': 'week_end DESC',
+      '$limit': '1',
+    });
+    const url = `${SODA}/${ARI_DATASET}.json?${params}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.length) return null;
-    const ili = parseFloat(data[0].weighted_ili ?? data[0].unweighted_ili ?? data[0]['%_weighted_ili'] ?? 0);
-    return isNaN(ili) ? null : ili;
+    return {
+      level: data[0].label ?? null,
+      weekEnd: data[0].week_end ?? null,
+    };
   } catch { return null; }
 }
 
-async function fetchVaxRate(stateCode) {
+async function fetchRespNetRates(stateName) {
   try {
-    // Flu vaccination coverage by state (adults 18+)
-    const url = `${SODA}/vh55-3he6.json?geography='${stateCode}'&$order=survey_year_season DESC&$limit=1`;
+    const params = new URLSearchParams({
+      '$select': 'surveillance_network,week_ending_date,weekly_rate',
+      '$where': [
+        `site='${stateName.replace(/'/g, "''")}'`,
+        "age_group='Overall'",
+        "sex='Overall'",
+        "race_ethnicity='Overall'",
+        "rate_type='Observed'",
+      ].join(' AND '),
+      '$order': 'week_ending_date DESC',
+      '$limit': '16',
+    });
+    const url = `${SODA}/${RESP_NET_DATASET}.json?${params}`;
     const res = await fetch(url);
-    if (!res.ok) return null;
+    if (!res.ok) return {};
     const data = await res.json();
-    if (!data.length) return tryCovidVaxFallback(stateCode);
-    const rate = parseFloat(data[0].estimate ?? data[0].coverage ?? 0);
-    return isNaN(rate) ? null : rate;
-  } catch { return tryCovidVaxFallback(stateCode); }
+    if (!data.length) return {};
+
+    const latestByNetwork = {};
+    for (const row of data) {
+      const network = row.surveillance_network;
+      if (!network || latestByNetwork[network]) continue;
+      latestByNetwork[network] = row;
+    }
+
+    return {
+      combinedHospRate: rate(latestByNetwork.Combined),
+      covidHospRate: rate(latestByNetwork['COVID-NET']),
+      fluHospRate: rate(latestByNetwork['FluSurv-NET']),
+      rsvHospRate: rate(latestByNetwork['RSV-NET']),
+      weekEnd: data[0].week_ending_date ?? null,
+    };
+  } catch { return {}; }
 }
 
-async function tryCovidVaxFallback(stateCode) {
-  try {
-    // COVID vaccination (adults) as a proxy for general vaccination culture
-    const url = `${SODA}/rh2h-3yt2.json?location='${stateCode}'&date_type=Admin&$order=date DESC&$limit=1`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.length) return null;
-    const rate = parseFloat(data[0].administered_dose1_pop_pct ?? 0);
-    return isNaN(rate) ? null : rate;
-  } catch { return null; }
-}
-
-async function fetchCovidHospitalization(stateCode) {
-  try {
-    // COVID-NET: lab-confirmed COVID hospitalizations per 100k
-    const url = `${SODA}/aemt-mg7g.json?state='${stateCode}'&$order=week_end_date DESC&$limit=2`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.length) return null;
-    const rate = parseFloat(data[0].weekly_rate ?? 0);
-    return isNaN(rate) ? null : rate;
-  } catch { return null; }
+function rate(row) {
+  const n = parseFloat(row?.weekly_rate);
+  return Number.isFinite(n) ? n : null;
 }
