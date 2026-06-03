@@ -57,18 +57,28 @@ export function scoreInfection(cdc) {
 }
 
 export function scoreHealthcare(overpass) {
-  if (!overpass || overpass.hospitalCount == null) return { score: 50, sub: {}, confidence: 'low' };
+  if (!overpass || (overpass.hospitalCount == null && overpass.nearestHospitalKm == null)) return { score: 50, sub: {}, confidence: 'low' };
 
-  const { hospitalCount, pharmacyCount, hasSpecialist } = overpass;
-  const hospScore = hospitalCountScore(hospitalCount);
+  const {
+    hospitalCount, pharmacyCount, hasSpecialist,
+    nearestHospitalKm, nearestHospitalName, urgentCareCount,
+  } = overpass;
+  const hospScore = nearestHospitalKm != null
+    ? hospitalDistanceScore(nearestHospitalKm)
+    : hospitalCountScore(hospitalCount ?? 0);
   const pharmScore = pharmacyCountScore(pharmacyCount ?? 0);
   const specScore = hasSpecialist ? 100 : 20;
+  const urgentScore = urgentCareCount > 0 ? 100 : 50;
 
-  const score = Math.round(hospScore * 0.40 + pharmScore * 0.25 + specScore * 0.35);
+  const score = Math.round(hospScore * 0.55 + pharmScore * 0.20 + specScore * 0.20 + urgentScore * 0.05);
   return {
     score: clamp(score),
-    sub: { hospScore, pharmScore, specScore, hospitalCount, pharmacyCount, hasSpecialist },
-    confidence: 'medium',
+    sub: {
+      hospScore, pharmScore, specScore, urgentScore,
+      hospitalCount, pharmacyCount, hasSpecialist,
+      nearestHospitalKm, nearestHospitalName, urgentCareCount,
+    },
+    confidence: overpass.confidence ?? 'medium',
   };
 }
 
@@ -196,6 +206,14 @@ function hospitalCountScore(n) {
   if (n === 2) return 70;
   if (n < 5) return 90;
   return 100;
+}
+
+function hospitalDistanceScore(km) {
+  if (km <= 10) return 100;
+  if (km <= 20) return lerp(100, 80, (km - 10) / 10);
+  if (km <= 35) return lerp(80, 55, (km - 20) / 15);
+  if (km <= 50) return lerp(55, 30, (km - 35) / 15);
+  return 10;
 }
 
 function pharmacyCountScore(n) {

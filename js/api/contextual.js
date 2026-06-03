@@ -68,7 +68,7 @@ export function getInfectionRiskContext(infResult, geo) {
 }
 
 export function getHealthcareContext(hcResult, geo) {
-  const { hospitalCount, hasSpecialist } = hcResult?.sub || {};
+  const { hospitalCount, hasSpecialist, nearestHospitalKm, nearestHospitalName } = hcResult?.sub || {};
   const insights = [];
 
   if (!hasSpecialist) {
@@ -85,11 +85,23 @@ export function getHealthcareContext(hcResult, geo) {
     });
   }
 
-  if (hospitalCount >= 5) {
+  if (nearestHospitalKm != null && nearestHospitalKm <= 20) {
+    insights.push({
+      icon: '🏥',
+      title: 'Adjacent-Area Hospital Access',
+      text: `${nearestHospitalName || 'The nearest hospital'} is ${nearestHospitalKm.toFixed(1)} km away. Nearby hospitals count even when they are outside the searched city or ZIP code.`
+    });
+  } else if (nearestHospitalKm != null) {
+    insights.push({
+      icon: '🚑',
+      title: 'Longer Hospital Travel',
+      text: `The nearest hospital found is ${nearestHospitalKm.toFixed(1)} km away. Plan for longer emergency travel and keep medical records accessible.`
+    });
+  } else if (hospitalCount >= 5) {
     insights.push({
       icon: '🏥',
       title: 'Multiple Hospital Options',
-      text: `${hospitalCount} hospitals within 10 km gives you choice and backup options in case your preferred hospital is at capacity.`
+      text: `${hospitalCount} hospitals within the wider search area gives you choice and backup options in case your preferred hospital is at capacity.`
     });
   } else if (hospitalCount === 0) {
     insights.push({

@@ -259,9 +259,15 @@ function infSummary(sub, cdc) {
 }
 
 function hcSummary(sub, overpass) {
-  if (!overpass || sub?.hospitalCount == null) return 'Healthcare facility data unavailable.';
+  if (!overpass || (sub?.hospitalCount == null && sub?.nearestHospitalKm == null)) return 'Healthcare facility data unavailable.';
   const spec = sub.hasSpecialist ? 'Specialist nearby ✓' : 'No specialist found';
-  return `${sub.hospitalCount} hospital${sub.hospitalCount !== 1 ? 's' : ''} · ${sub.pharmacyCount} pharmac${sub.pharmacyCount !== 1 ? 'ies' : 'y'} · ${spec}`;
+  const hospital = sub.nearestHospitalKm != null
+    ? `Nearest hospital ${sub.nearestHospitalKm.toFixed(1)} km`
+    : `${sub.hospitalCount} hospital${sub.hospitalCount !== 1 ? 's' : ''}`;
+  const pharmacies = sub.pharmacyCount > 0
+    ? `${sub.pharmacyCount} pharmac${sub.pharmacyCount !== 1 ? 'ies' : 'y'}`
+    : 'no nearby pharmacies';
+  return `${hospital} · ${pharmacies} · ${spec}`;
 }
 
 function clSummary(sub, weather) {

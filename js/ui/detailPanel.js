@@ -8,7 +8,8 @@ const TOOLTIPS = {
   ari: 'Acute respiratory illness activity reflects emergency department visits for respiratory diagnoses, including COVID-19, flu, RSV, and other respiratory infections.',
   respHosp: 'Weekly hospitalization rates show current severe respiratory disease burden per 100,000 people. Higher values are more concerning for immunocompromised people.',
   pathogenHosp: 'Pathogen-specific hospitalization rates separate COVID-19, flu, and RSV burden when CDC surveillance data is available.',
-  hospitals: 'Proximity to hospitals matters when immune-related emergencies arise. Distance can be the difference between a manageable episode and a life-threatening delay.',
+  hospitals: 'Proximity to hospitals matters when immune-related emergencies arise. Nearby hospitals in adjacent towns, counties, or regions count because travel distance matters more than boundaries.',
+  urgentCare: 'Urgent care and emergency clinics can help with less severe episodes, but they do not replace a full hospital for immune-related emergencies.',
   pharmacies: 'Easy access to pharmacies ensures you can fill specialty medications without long travel, especially important during illness when driving is difficult.',
   specialist: 'Immunologists and allergists provide essential ongoing care. Lack of local specialists often means long waits and travel for routine monitoring.',
   humidity: 'Relative humidity between 30–55% minimises both mold growth risk and respiratory dryness. High humidity encourages mold spores; low humidity dries mucous membranes, reducing their protective function.',
@@ -75,8 +76,13 @@ const CATEGORIES = {
     source: 'OpenStreetMap (Overpass API)',
     sourceUrl: 'https://www.openstreetmap.org/',
     metrics: (sub) => [
+      sub.nearestHospitalKm != null && {
+        name: 'Nearest Hospital', value: sub.nearestHospitalKm,
+        display: `${sub.nearestHospitalKm.toFixed(1)} km${sub.nearestHospitalName ? ` — ${sub.nearestHospitalName}` : ''}`,
+        score: sub.hospScore, tooltip: TOOLTIPS.hospitals,
+      },
       {
-        name: 'Hospitals within 10 km', value: sub.hospitalCount ?? '?',
+        name: 'Hospitals within 50 km', value: sub.hospitalCount ?? '?',
         display: `${sub.hospitalCount ?? 'Unknown'} hospital${sub.hospitalCount !== 1 ? 's' : ''}`,
         score: sub.hospScore, tooltip: TOOLTIPS.hospitals,
       },
@@ -90,7 +96,12 @@ const CATEGORIES = {
         display: sub.hasSpecialist ? '✓ Specialist found' : '✗ None found',
         score: sub.specScore, tooltip: TOOLTIPS.specialist,
       },
-    ],
+      sub.urgentCareCount != null && {
+        name: 'Urgent/Emergency Clinics', value: sub.urgentCareCount,
+        display: `${sub.urgentCareCount} support facilit${sub.urgentCareCount !== 1 ? 'ies' : 'y'} found`,
+        score: sub.urgentScore, tooltip: TOOLTIPS.urgentCare,
+      },
+    ].filter(Boolean),
   },
   climate: {
     title: '🌡️ Climate & Allergens',

@@ -5,28 +5,35 @@ const BASE = 'https://places.googleapis.com/v1';
 export async function fetchGoogleHealthcare(lat, lon, apiKey) {
   if (!apiKey) return null;
 
-  const key = `g_healthcare_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const key = `g_healthcare_v2_${lat.toFixed(2)}_${lon.toFixed(2)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
   try {
     const [hospitals, pharmacies, specialists] = await Promise.all([
-      nearbySearch(lat, lon, apiKey, 'hospital', 10000),
+      nearbySearch(lat, lon, apiKey, 'hospital', 50000),
       nearbySearch(lat, lon, apiKey, 'pharmacy', 5000),
       specialistSearch(lat, lon, apiKey),
     ]);
 
     if (!hospitals?.length && !pharmacies?.length) return null;
+    const hospitalsByDistance = hospitals
+      .map(place => ({ ...place, distanceKm: distanceMeters(lat, lon, place.location) / 1000 }))
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+    const nearestHospital = hospitalsByDistance[0] ?? null;
 
     const result = {
       hospitalCount: hospitals.length,
       pharmacyCount: pharmacies.length,
       hasSpecialist: specialists.length > 0,
-      hospitals: hospitals.slice(0, 10).map(placeSummary),
+      nearestHospitalKm: nearestHospital?.distanceKm ?? null,
+      nearestHospitalName: nearestHospital?.displayName?.text ?? null,
+      urgentCareCount: 0,
+      hospitals: hospitalsByDistance.slice(0, 10).map(placeSummary),
       pharmacies: pharmacies.slice(0, 3).map(p => p.displayName?.text ?? 'Pharmacy'),
       specialists: specialists.slice(0, 5).map(placeSummary),
       source: 'Google Places API',
-      confidence: 'high',
+      confidence: nearestHospital ? 'high' : 'medium',
       timestamp: new Date().toISOString(),
     };
     cacheSet(key, result, 24 * 60 * 60 * 1000);
@@ -56,10 +63,7 @@ async function nearbySearch(lat, lon, apiKey, type, radiusMeters) {
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.places ?? []).filter(place => {
-    const name = place.displayName?.text ?? '';
-    return /allerg|immunol/i.test(name) && distanceMeters(lat, lon, place.location) <= 20000;
-  });
+  return data.places ?? [];
 }
 
 async function specialistSearch(lat, lon, apiKey) {
@@ -82,7 +86,10 @@ async function specialistSearch(lat, lon, apiKey) {
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return data.places ?? [];
+  return (data.places ?? []).filter(place => {
+    const name = place.displayName?.text ?? '';
+    return /allerg|immunol/i.test(name) && distanceMeters(lat, lon, place.location) <= 20000;
+  });
 }
 
 function placeSummary(place) {
@@ -90,6 +97,7 @@ function placeSummary(place) {
     name: place.displayName?.text ?? 'Healthcare facility',
     lat: place.location?.latitude ?? null,
     lon: place.location?.longitude ?? null,
+    distanceKm: place.distanceKm ?? null,
   };
 }
 

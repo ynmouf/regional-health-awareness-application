@@ -36,8 +36,12 @@ export function renderCategoryCard(id, score, summary, confidence) {
   document.getElementById(`summary-${id}`).textContent = summary;
 
   const conf = document.getElementById(`conf-${id}`);
-  conf.textContent = confidence;
+  conf.textContent = `Data confidence: ${titleCase(confidence)}`;
   conf.className = `confidence-badge conf-${confidence.toLowerCase()}`;
+}
+
+function titleCase(str) {
+  return String(str || 'unknown').replace(/^\w/, c => c.toUpperCase());
 }
 
 export function renderRadarChart(scores) {

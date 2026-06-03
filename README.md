@@ -161,7 +161,7 @@ Users can customize these in the Settings panel.
 - COVID-19, flu, and RSV hospitalization rates per 100k
 
 **Healthcare Access (30%)**
-- Hospital count within 10 km
+- Nearest hospital distance within a 50 km search radius
 - Pharmacy count within 5 km
 - Immunology/allergy specialist within 20 km
 
