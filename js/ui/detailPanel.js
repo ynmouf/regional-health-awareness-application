@@ -208,7 +208,8 @@ function buildBody(def, data) {
   }
 
   const noteHtml = data.note ? `<p class="detail-source">⚠️ ${data.note}</p>` : '';
-  const sourceHtml = `<p class="detail-source">Source: <a href="${def.sourceUrl}" target="_blank" rel="noopener">${escHtml(data.source || def.source)}</a> · Retrieved ${formatTime(data.timestamp)}</p>`;
+  const confidenceHtml = ` · Data confidence: ${escHtml(formatConfidence(data.confidence))}`;
+  const sourceHtml = `<p class="detail-source">Source: <a href="${def.sourceUrl}" target="_blank" rel="noopener">${escHtml(data.source || def.source)}</a> · Retrieved ${formatTime(data.timestamp)}${confidenceHtml}</p>`;
 
   return metricHtml + contextHtml + noteHtml + sourceHtml;
 }
@@ -240,4 +241,10 @@ function aqiCategory(aqi) {
 function formatTime(iso) {
   if (!iso) return 'unknown time';
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+function formatConfidence(confidence) {
+  if (!confidence) return 'Unknown';
+  const value = String(confidence).trim().toLowerCase();
+  return value ? value[0].toUpperCase() + value.slice(1) : 'Unknown';
 }
