@@ -14,9 +14,10 @@ export function scoreAirQuality(airNow, openMeteo, seasonal = null, geo = {}) {
   // Weight what we have
   if (aqiScore == null && pm25Score == null && pollenScore == null && smokeScore == null) {
     return {
-      score: 50,
+      score: null,
       sub: { aqiScore: null, pm25Score: null, pollenScore, aqi, pm25, pollenLevel, pollenSource },
       confidence: 'low',
+      unavailable: true,
     };
   }
 
@@ -87,12 +88,12 @@ export function scoreInfection(cdc, wastewater = null, localHealth = null) {
  * Based on health-based violations and acute-risk incidents reported to the EPA.
  */
 export function scoreWaterSafety(waterData) {
-  if (!waterData) return { score: 50, sub: {}, confidence: 'low' };
+  if (!waterData) return { score: null, sub: {}, confidence: 'low', unavailable: true };
 
   const { healthViolations5yr, tier1Count, outstandingPct } = waterData;
   if (waterData.stateLevel) {
     return {
-      score: 50,
+      score: null,
       sub: {
         violationScore: null,
         tier1Score: null,
@@ -105,6 +106,8 @@ export function scoreWaterSafety(waterData) {
         partial: waterData.partial ?? true,
       },
       confidence: 'low',
+      unavailable: true,
+      contextOnly: true,
     };
   }
 
@@ -143,7 +146,7 @@ export function scoreWaterSafety(waterData) {
   for (const [val, w] of parts) {
     if (val != null) { score += val * w; total += w; }
   }
-  if (total === 0) return { score: 50, sub: {}, confidence: 'low' };
+  if (total === 0) return { score: null, sub: {}, confidence: 'low', unavailable: true };
 
   return {
     score: clamp(Math.round(score / total)),
@@ -159,7 +162,7 @@ export function scoreWaterSafety(waterData) {
 }
 
 export function scoreHealthcare(overpass, cmsQuality = null) {
-  if (!overpass || (overpass.hospitalCount == null && overpass.nearestHospitalKm == null)) return { score: 50, sub: {}, confidence: 'low' };
+  if (!overpass || (overpass.hospitalCount == null && overpass.nearestHospitalKm == null)) return { score: null, sub: {}, confidence: 'low', unavailable: true };
 
   const {
     hospitalCount, pharmacyCount, specialistCount, hasSpecialist,
@@ -215,7 +218,7 @@ export function scoreClimate(weather, openMeteo, seasonal = null) {
   if (pollenScore != null) { score += pollenScore * w.pollen; total += w.pollen; }
   if (tailRiskScore != null) { score += tailRiskScore * w.tail; total += w.tail; }
 
-  if (total === 0) return { score: 50, sub: {}, confidence: 'low' };
+  if (total === 0) return { score: null, sub: {}, confidence: 'low', unavailable: true };
 
   return {
     score: clamp(Math.round(score / total)),
@@ -235,14 +238,16 @@ export function scoreClimate(weather, openMeteo, seasonal = null) {
 }
 
 export function scoreOverall(scores, weights) {
-  const { air, water, healthcare, climate } = scores;
   const w = normalizeWeights(weights);
-  return clamp(Math.round(
-    air * w.air +
-    water * w.water +
-    healthcare * w.healthcare +
-    climate * w.climate
-  ));
+  let score = 0, total = 0;
+  Object.entries(w).forEach(([key, weight]) => {
+    const value = scores[key];
+    if (value != null && Number.isFinite(value)) {
+      score += value * weight;
+      total += weight;
+    }
+  });
+  return total > 0 ? clamp(Math.round(score / total)) : null;
 }
 
 export function buildRiskAssessment({ scores, categoryResults, data = {}, geo = {}, weights, profile }) {
@@ -254,29 +259,34 @@ export function buildRiskAssessment({ scores, categoryResults, data = {}, geo = 
     climate: categoryResults.climate.confidence,
   };
   const normalized = normalizeWeights(weights);
-  const confidenceScore = Object.entries(confidences).reduce((sum, [key, value]) => {
-    return sum + confidenceValue(value) * normalized[key];
-  }, 0);
+  const scoredKeys = Object.keys(scores).filter(key => scores[key] != null && Number.isFinite(scores[key]));
+  const scoredWeight = scoredKeys.reduce((sum, key) => sum + normalized[key], 0);
+  const confidenceScore = scoredWeight > 0
+    ? scoredKeys.reduce((sum, key) => sum + confidenceValue(confidences[key]) * (normalized[key] / scoredWeight), 0)
+    : 0;
+  const missingCount = Object.keys(scores).length - scoredKeys.length;
   const redFlags = buildRedFlags({ categoryResults, data, geo, profile });
   const penalty = redFlags.reduce((sum, flag) => sum + flag.penalty, 0);
-  const overall = clamp(Math.round(base - penalty));
-  const uncertainty = Math.round((1 - confidenceScore) * 18 + redFlags.length * 1.5);
+  const overall = base == null ? null : clamp(Math.round(base - penalty));
+  const uncertainty = Math.round((1 - confidenceScore) * 18 + redFlags.length * 1.5 + missingCount * 6);
 
   return {
     base,
     overall,
     confidence: confidenceLabel(confidenceScore),
     confidenceScore,
-    range: [clamp(overall - uncertainty), clamp(overall + Math.max(4, Math.round(uncertainty * 0.7)))],
+    range: overall == null ? [null, null] : [clamp(overall - uncertainty), clamp(overall + Math.max(4, Math.round(uncertainty * 0.7)))],
     redFlags,
     dataCompleteness: {
-      used: Object.values(confidences).filter(value => value !== 'low').length,
+      used: scoredKeys.length,
       total: Object.keys(confidences).length,
+      missing: missingCount,
     },
   };
 }
 
 export function scoreLabel(score) {
+  if (score == null || !Number.isFinite(score)) return { label: 'Not Scored', cls: 'na', badgeCls: 'badge-na', gaugeCls: 'gauge-na' };
   if (score >= 80) return { label: 'Low Risk', cls: 'low', badgeCls: 'badge-low', gaugeCls: 'gauge-low' };
   if (score >= 60) return { label: 'Moderate Risk', cls: 'mod', badgeCls: 'badge-mod', gaugeCls: 'gauge-mod' };
   if (score >= 40) return { label: 'Elevated Risk', cls: 'elev', badgeCls: 'badge-elev', gaugeCls: 'gauge-elev' };
@@ -285,6 +295,7 @@ export function scoreLabel(score) {
 }
 
 export function scoreColor(score) {
+  if (score == null || !Number.isFinite(score)) return '#9aa3b2';
   if (score >= 80) return '#4caf50';
   if (score >= 60) return '#8bc34a';
   if (score >= 40) return '#ff9800';
@@ -496,17 +507,20 @@ function buildRedFlags({ categoryResults, data, geo, profile }) {
     if (water.healthViolations5yr >= 1 && water.healthViolations5yr < 5) add('medium', 'Recent drinking water violation', `${water.healthViolations5yr} health-based violation${water.healthViolations5yr !== 1 ? 's' : ''} reported in last 5 years.`, 5);
   }
 
-  if (healthcare.estimatedHospitalDriveMinutes >= 35) add('high', 'Long emergency travel time', `Estimated hospital drive time is ${healthcare.estimatedHospitalDriveMinutes} minutes.`, 8);
-  if (healthcare.hospitalCount <= 1) add('medium', 'Limited hospital redundancy', 'Few hospital options were found in the wider search area.', 4);
-  if (!healthcare.hasSpecialist) add('medium', 'No local immunology/allergy specialist', 'Specialty care may require travel or telehealth.', 5);
-  if (healthcare.cmsAvgRating != null && healthcare.cmsAvgRating < 3) add('medium', 'Nearby hospital quality is below average', `Matched CMS average rating is ${healthcare.cmsAvgRating.toFixed(1)} stars.`, 4);
+  if (!categoryResults.healthcare.unavailable) {
+    if (healthcare.estimatedHospitalDriveMinutes >= 35) add('high', 'Long emergency travel time', `Estimated hospital drive time is ${healthcare.estimatedHospitalDriveMinutes} minutes.`, 8);
+    if (healthcare.hospitalCount <= 1) add('medium', 'Limited hospital redundancy', 'Few hospital options were found in the wider search area.', 4);
+    if (healthcare.hasSpecialist === false) add('medium', 'No local immunology/allergy specialist', 'Specialty care may require travel or telehealth.', 5);
+    if (healthcare.cmsAvgRating != null && healthcare.cmsAvgRating < 3) add('medium', 'Nearby hospital quality is below average', `Matched CMS average rating is ${healthcare.cmsAvgRating.toFixed(1)} stars.`, 4);
+  }
 
   if (climate.heatDays35C >= 10) add('high', 'Frequent extreme heat', `${climate.heatDays35C} days/year exceeded 35°C.`, 6);
   if (climate.coldDaysMinus10C >= 20) add('medium', 'Frequent extreme cold', `${climate.coldDaysMinus10C} days/year dropped below -10°C.`, 4);
   if (climate.humidDays70 >= 45) add('medium', 'High humidity/mold pressure', `${climate.humidDays70} high-humidity days/year suggest indoor mold-management burden.`, 4);
 
   Object.entries(categoryResults).forEach(([key, result]) => {
-    if (result.confidence === 'low') add('low', `${labelForCategory(key)} data is weak`, 'This category contributes uncertainty to the score.', 2);
+    if (result.unavailable) add('low', `${labelForCategory(key)} data unavailable`, 'This category is greyed out and is not included in the score.', 0);
+    else if (result.confidence === 'low') add('low', `${labelForCategory(key)} data is weak`, 'This category contributes uncertainty to the score range.', 0);
   });
 
   return flags.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));

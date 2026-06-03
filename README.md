@@ -7,7 +7,7 @@ A browser app that helps immunocompromised people assess whether a location is s
 - **City/ZIP search with autocomplete** — type "Denver, CO" or "10001"
 - **4-factor risk assessment** — air quality, drinking water safety, healthcare access, climate & allergens
 - **Overall safety score** — 0–100, with risk label (Low/Moderate/Elevated/High/Severe)
-- **Confidence-adjusted scoring** — shows a score range, data confidence, and dealbreaker flags
+- **Confidence-adjusted scoring** — shows a score range, data confidence, excluded unavailable categories, and dealbreaker flags
 - **Customizable weights** — drag sliders to prioritize the factors that matter most for your condition
 - **Seasonal calendar** — 12-month heatmap showing which months are safest
 - **Compare mode** — side-by-side scoring for two cities or ZIP codes
@@ -140,7 +140,7 @@ health-location-scorer/
 
 ## Scoring Algorithm
 
-Each of the 4 factors is normalized to 0–100 (100 = safest). Final score is a weighted average.
+Each available factor is normalized to 0–100 (100 = safest). Final score is a weighted average of scored categories only; categories with unavailable local data are greyed out and excluded from the average.
 
 ### Default Weights
 - **Air Quality** 25%
@@ -179,6 +179,7 @@ Users can customize these in the Settings panel.
 
 - **EPA SDWIS is US-only** — non-US locations show water data as unavailable
 - **Statewide water fallback is context-only** — it is not scored as local drinking water risk
+- **Unavailable categories are not scored** — missing API data is shown as `N/A`, greyed out, and excluded from the weighted average
 - **Google Places/Pollen are optional keyed APIs** — without keys, the app uses OpenStreetMap and Open-Meteo fallbacks
 - **Open-Meteo pollen data is modeled** — species coverage varies by region
 - **Overpass queries can be slow** — results are cached for 24h locally when Google Places is unavailable

@@ -478,6 +478,7 @@ nav { display: flex; gap: .4rem; }
 .conf-high { background: #e8f5e9; color: #2e7d32; }
 .conf-medium { background: #fff8e1; color: #f57f17; }
 .conf-low { background: #fce4ec; color: #c62828; }
+.conf-na { background: #eef1f5; color: #697386; }
 
 .card-score {
   margin-left: auto; font-size: 1.6rem; font-weight: 800;
@@ -495,6 +496,22 @@ nav { display: flex; gap: .4rem; }
 }
 
 .card-summary { font-size: .875rem; color: var(--text-2); flex: 1; }
+
+.category-card.unavailable {
+  background: #f5f6f8;
+  border: 1px solid #d9dee7;
+  box-shadow: none;
+  color: #697386;
+}
+.category-card.unavailable:hover { box-shadow: none; transform: none; }
+.category-card.unavailable .card-icon,
+.category-card.unavailable .card-title,
+.category-card.unavailable .card-summary,
+.category-card.unavailable .card-data-confidence {
+  color: #7b8494;
+}
+.category-card.unavailable .card-bar-wrap { background: #d9dee7; }
+.category-card.unavailable .card-details-btn { color: #667085; }
 
 .card-data-confidence {
   font-size: .76rem;
@@ -516,12 +533,14 @@ nav { display: flex; gap: .4rem; }
 .score-elev   { color: var(--risk-elevated); }
 .score-high   { color: var(--risk-high); }
 .score-severe { color: var(--risk-severe); }
+.score-na     { color: #9aa3b2; }
 
 .badge-low    { background: #e8f5e9; color: #2e7d32; }
 .badge-mod    { background: #f1f8e9; color: #558b2f; }
 .badge-elev   { background: #fff3e0; color: #e65100; }
 .badge-high   { background: #ffebee; color: #c62828; }
 .badge-severe { background: #b71c1c; color: #fff; }
+.badge-na     { background: #eef1f5; color: #697386; }
 
 /* ── Seasonal Calendar ─────────────────────────────── */
 .seasonal-section {
@@ -598,6 +617,15 @@ nav { display: flex; gap: .4rem; }
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 1rem 1.1rem;
+}
+.detail-metric.unavailable {
+  background: #f5f6f8;
+  border: 1px solid #d9dee7;
+  color: #697386;
+}
+.detail-metric.unavailable .detail-metric-value,
+.detail-metric.unavailable .detail-metric-desc {
+  color: #7b8494 !important;
 }
 .detail-metric-header {
   display: flex; justify-content: space-between;

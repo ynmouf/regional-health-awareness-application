@@ -1,7 +1,7 @@
-import { geocode } from './geocoding.js?v=water-fallback-20260603';
+import { geocode } from './geocoding.js?v=grey-missing-20260603';
 import { fetchAirNow } from './api/airnow.js';
 import { fetchAirQuality, fetchWeather, fetchSeasonalHistory } from './api/openmeteo.js';
-import { fetchWaterSafety } from './api/waterSafety.js?v=water-fallback-20260603';
+import { fetchWaterSafety } from './api/waterSafety.js?v=grey-missing-20260603';
 import { fetchHealthcare } from './api/overpass.js';
 import { fetchGoogleHealthcare } from './api/googleHealthcare.js';
 import { fetchGooglePollen, mergePollen } from './api/googlePollen.js';
@@ -9,15 +9,15 @@ import { fetchCMSHospitalQuality } from './api/cms.js';
 import {
   scoreAirQuality, scoreWaterSafety, scoreHealthcare, scoreClimate,
   buildRiskAssessment,
-} from './scoring.js?v=water-fallback-20260603';
+} from './scoring.js?v=grey-missing-20260603';
 import { getWeights, initWeightSliders, getAlertThreshold, getActiveProfile } from './weights.js';
 import { initSearch } from './ui/search.js';
 import { initLightbox } from './ui/lightbox.js';
-import { renderOverall, renderCategoryCard, renderRadarChart, updateRadarChart, renderRiskIntelligence } from './ui/scoreCard.js';
-import { initDetailPanel, setDetailData } from './ui/detailPanel.js?v=water-fallback-20260603';
+import { renderOverall, renderCategoryCard, renderRadarChart, updateRadarChart, renderRiskIntelligence } from './ui/scoreCard.js?v=grey-missing-20260603';
+import { initDetailPanel, setDetailData } from './ui/detailPanel.js?v=grey-missing-20260603';
 import { renderSeasonalCalendar } from './ui/seasonalCalendar.js';
 import { renderLocationImages } from './ui/locationImages.js';
-import { initComparePanel, openCompare } from './ui/comparePanel.js';
+import { initComparePanel, openCompare } from './ui/comparePanel.js?v=grey-missing-20260603';
 import { fetchCityPhotos } from './api/images.js';
 import { fetchPlacePhotos } from './api/places.js';
 
@@ -62,7 +62,7 @@ async function handleSearch(query, preResolved) {
       air:        { sub: airResult.sub, timestamp: latestTimestamp(airNow, airQuality, googlePollen), source: sourceList(airNow?.source, airQuality?.source, googlePollen?.source), confidence: airResult.confidence, note: airNote(geo, airResult) },
       water:      { sub: waterResult.sub, timestamp: waterData?.timestamp, source: waterData?.source ?? 'EPA SDWIS', sourceUrl: waterData?.sourceUrl, confidence: waterResult.confidence, note: waterNote(geo, waterData) },
       healthcare: { sub: hcResult.sub, timestamp: latestTimestamp(healthcare, cmsQuality), source: sourceList(healthcare?.source, cmsQuality?.source), confidence: hcResult.confidence },
-      climate:    { sub: clResult.sub, timestamp: latestTimestamp(weather, googlePollen, seasonal), source: sourceList(weather?.source, googlePollen?.source, seasonal?.source), confidence: clResult.confidence, note: clResult.confidence === 'low' ? 'Climate/allergen data is unavailable; this category uses a neutral placeholder.' : null },
+      climate:    { sub: clResult.sub, timestamp: latestTimestamp(weather, googlePollen, seasonal), source: sourceList(weather?.source, googlePollen?.source, seasonal?.source), confidence: clResult.confidence, note: clResult.unavailable ? 'Climate/allergen data is unavailable; this category is excluded from the score.' : null },
     }, geo, seasonal);
 
     // Render
@@ -119,7 +119,7 @@ async function buildAssessment(query, preResolved, options = {}) {
     fetchAirQuality(geo.lat, geo.lon),
     fetchGooglePollen(geo.lat, geo.lon, getGooglePollenKey()),
     fetchWeather(geo.lat, geo.lon),
-    fetchWaterSafety(geo.stateCode, geo.city, geo.zipCode),
+    geo.countryCode === 'US' ? fetchWaterSafety(geo.stateCode, geo.city, geo.zipCode) : Promise.resolve(null),
     fetchBestHealthcare(geo.lat, geo.lon),
     includeSeasonal ? fetchSeasonalHistory(geo.lat, geo.lon) : Promise.resolve(null),
     includePhotos ? fetchPlacePhotos(geo.displayName, getGooglePlacesKey()).then(r => r || fetchCityPhotos(geo.displayName)) : Promise.resolve(null),
@@ -250,6 +250,10 @@ function checkAlertThreshold(score, location) {
   const threshold = getAlertThreshold();
   if (threshold == null) return;
   const banner = document.getElementById('alert-banner');
+  if (score == null || !Number.isFinite(score)) {
+    banner.hidden = true;
+    return;
+  }
   if (score < threshold) {
     banner.textContent = `⚠️ Alert: ${location} has a safety score of ${score}, which is below your threshold of ${threshold}.`;
     banner.hidden = false;
@@ -387,7 +391,7 @@ function healthcareHasData(healthcare) {
 }
 
 function airNote(geo, airResult) {
-  if (airResult.confidence === 'low') return 'Air quality/allergen data is unavailable; this category uses a neutral placeholder.';
+  if (airResult.unavailable) return 'Air quality/allergen data is unavailable; this category is excluded from the score.';
   if (geo.countryCode !== 'US') return 'AirNow data is US-only; using modeled AQI where available.';
   return null;
 }

@@ -5,11 +5,12 @@ let radarChart = null;
 export function renderOverall(location, overallScore, risk = null, profile = null) {
   const lbl = scoreLabel(overallScore);
   const color = scoreColor(overallScore);
+  const scored = overallScore != null && Number.isFinite(overallScore);
 
   document.getElementById('result-location').textContent = location;
 
   const numEl = document.getElementById('score-number');
-  numEl.textContent = overallScore;
+  numEl.textContent = scored ? overallScore : 'N/A';
   numEl.className = `score-number score-${lbl.cls}`;
 
   const badge = document.getElementById('score-badge');
@@ -17,16 +18,16 @@ export function renderOverall(location, overallScore, risk = null, profile = nul
   badge.className = `score-badge ${lbl.badgeCls}`;
 
   const fill = document.getElementById('gauge-fill');
-  fill.style.width = `${overallScore}%`;
+  fill.style.width = scored ? `${overallScore}%` : '0%';
   fill.style.background = color;
 
   const meta = document.getElementById('score-meta');
   if (meta && risk) {
     meta.hidden = false;
     document.getElementById('score-confidence').textContent = `Confidence ${risk.confidence}`;
-    document.getElementById('score-range').textContent = `Range ${risk.range[0]}-${risk.range[1]}`;
+    document.getElementById('score-range').textContent = scored ? `Range ${risk.range[0]}-${risk.range[1]}` : 'Range unavailable';
     document.getElementById('score-completeness').textContent =
-      `${risk.dataCompleteness.used}/${risk.dataCompleteness.total} strong data categories · ${profile?.label ?? 'General profile'}`;
+      `${risk.dataCompleteness.used}/${risk.dataCompleteness.total} scored categories · ${profile?.label ?? 'General profile'}`;
   } else if (meta) {
     meta.hidden = true;
   }
@@ -55,25 +56,30 @@ export function renderRiskIntelligence(risk) {
 export function renderCategoryCard(id, score, summary, confidence) {
   const lbl = scoreLabel(score);
   const color = scoreColor(score);
+  const scored = score != null && Number.isFinite(score);
+  const card = document.getElementById(`card-${id}`);
+  if (card) card.classList.toggle('unavailable', !scored);
 
   const scoreEl = document.getElementById(`score-${id}`);
-  scoreEl.textContent = score;
+  scoreEl.textContent = scored ? score : 'N/A';
   scoreEl.className = `card-score score-${lbl.cls}`;
 
   const bar = document.getElementById(`bar-${id}`);
-  bar.style.width = `${score}%`;
+  bar.style.width = scored ? `${score}%` : '0%';
   bar.style.background = color;
 
   document.getElementById(`summary-${id}`).textContent = summary;
 
   const conf = document.getElementById(`conf-${id}`);
-  conf.textContent = lbl.label;
+  conf.textContent = scored ? lbl.label : 'Not scored';
   conf.className = `confidence-badge ${lbl.badgeCls}`;
   conf.title = `Data confidence: ${confidence}`;
 
   const dataConf = document.getElementById(`data-conf-${id}`);
   if (dataConf) {
-    dataConf.textContent = `Data confidence: ${formatConfidence(confidence)}`;
+    dataConf.textContent = scored
+      ? `Data confidence: ${formatConfidence(confidence)}`
+      : 'Data unavailable · excluded from score';
   }
 }
 
@@ -93,10 +99,11 @@ function escAttr(str) {
 
 export function renderRadarChart(scores) {
   const ctx = document.getElementById('radar-chart').getContext('2d');
+  const values = radarValues(scores);
   const data = {
-    labels: ['Air Quality', 'Toxin Burden', 'Healthcare', 'Climate'],
+    labels: ['Air Quality', 'Water Safety', 'Healthcare', 'Climate'],
     datasets: [{
-      data: [scores.air, scores.water, scores.healthcare, scores.climate],
+      data: values,
       backgroundColor: 'rgba(79,110,247,.15)',
       borderColor: 'rgba(79,110,247,.8)',
       borderWidth: 2,
@@ -125,6 +132,11 @@ export function renderRadarChart(scores) {
 
 export function updateRadarChart(scores) {
   if (!radarChart) { renderRadarChart(scores); return; }
-  radarChart.data.datasets[0].data = [scores.air, scores.water, scores.healthcare, scores.climate];
+  radarChart.data.datasets[0].data = radarValues(scores);
   radarChart.update('active');
+}
+
+function radarValues(scores) {
+  return [scores.air, scores.water, scores.healthcare, scores.climate]
+    .map(value => value != null && Number.isFinite(value) ? value : null);
 }

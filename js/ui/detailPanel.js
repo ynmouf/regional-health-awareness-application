@@ -22,21 +22,21 @@ const CATEGORIES = {
     source: 'AirNow (EPA) and Open-Meteo Air Quality API',
     sourceUrl: 'https://docs.airnowapi.org/',
     metrics: (sub) => [
-      sub.aqi != null && {
+      metricOrMissing(sub.aqi != null, {
         name: 'AQI (Air Quality Index)', value: sub.aqi,
         display: `${sub.aqi} — ${aqiCategory(sub.aqi)}`,
         score: sub.aqiScore, tooltip: TOOLTIPS.aqi,
-      },
-      sub.pm25 != null && {
+      }, 'AQI (Air Quality Index)', TOOLTIPS.aqi),
+      metricOrMissing(sub.pm25 != null, {
         name: 'PM2.5 (Fine Particles)', value: sub.pm25,
         display: `${sub.pm25.toFixed(1)} µg/m³`,
         score: sub.pm25Score, tooltip: TOOLTIPS.pm25,
-      },
-      sub.pollenLevel != null && {
+      }, 'PM2.5 (Fine Particles)', TOOLTIPS.pm25),
+      metricOrMissing(sub.pollenLevel != null, {
         name: 'Pollen Level', value: sub.pollenLevel ?? 'Unknown',
         display: sub.pollenLevel ?? 'Data unavailable',
         score: sub.pollenScore, tooltip: TOOLTIPS.pollen,
-      },
+      }, 'Pollen Level', TOOLTIPS.pollen),
       sub.smokeScore != null && {
         name: 'Wildfire Smoke Tail Risk', value: sub.smokeScore,
         display: `${sub.smokeScore}/100`,
@@ -49,22 +49,24 @@ const CATEGORIES = {
     source: 'EPA Safe Drinking Water Information System (SDWIS)',
     sourceUrl: 'https://www.epa.gov/ground-water-and-drinking-water',
     metrics: (sub) => [
-      sub.healthViolations5yr != null && {
+      metricOrMissing(sub.healthViolations5yr != null, {
         name: sub.stateLevel ? 'Statewide Health-Based Violations (Context)' : 'Health-Based Violations (5 Years)', value: sub.healthViolations5yr,
         display: `${sub.healthViolations5yr} violation${sub.healthViolations5yr !== 1 ? 's' : ''}${sub.stateLevel ? ' statewide' : ''}`,
         score: sub.violationScore,
+        available: !sub.stateLevel,
         tooltip: sub.stateLevel
           ? 'Statewide SDWIS violations are context only and are not scored as local water risk.'
           : 'Count of Maximum Contaminant Level (MCL) and other health-based violations in the last 5 years for public water systems serving this area. Immunocompromised people face severe risk from contaminants that healthy immune systems manage without symptoms.',
-      },
-      sub.tier1Count != null && {
+      }, 'Health-Based Violations (5 Years)', 'Local EPA SDWIS health-based violation data was not found for this area.'),
+      metricOrMissing(sub.tier1Count != null, {
         name: sub.stateLevel ? 'Statewide Acute Risk Violations (Context)' : 'Acute Risk Violations (Tier 1)', value: sub.tier1Count,
         display: sub.tier1Count === 0 ? 'None found' : `${sub.tier1Count} acute-risk violation${sub.tier1Count !== 1 ? 's' : ''}${sub.stateLevel ? ' statewide' : ''}`,
         score: sub.tier1Score,
+        available: !sub.stateLevel,
         tooltip: sub.stateLevel
           ? 'Statewide Tier 1 notices are context only and are not scored as local water risk.'
           : 'Tier 1 public notifications are required when there is an immediate risk to public health — including bacteria (E. coli, coliforms), nitrites, and other acute contaminants that are immediately dangerous for immunocompromised individuals.',
-      },
+      }, 'Acute Risk Violations (Tier 1)', 'Local EPA SDWIS Tier 1 notice data was not found for this area.'),
       sub.outstandingPct != null && {
         name: 'Outstanding Performer Systems', value: sub.outstandingPct,
         display: `${sub.outstandingPct}% of local systems are EPA Outstanding Performers`,
@@ -84,31 +86,31 @@ const CATEGORIES = {
     source: 'OpenStreetMap (Overpass API)',
     sourceUrl: 'https://www.openstreetmap.org/',
     metrics: (sub) => [
-      sub.nearestHospitalKm != null && {
+      metricOrMissing(sub.nearestHospitalKm != null, {
         name: 'Nearest Hospital', value: sub.nearestHospitalKm,
         display: `${sub.nearestHospitalKm.toFixed(1)} km${sub.nearestHospitalName ? ` — ${sub.nearestHospitalName}` : ''}`,
         score: sub.hospScore, tooltip: TOOLTIPS.hospitals,
-      },
+      }, 'Nearest Hospital', TOOLTIPS.hospitals),
       sub.estimatedHospitalDriveMinutes != null && {
         name: 'Estimated Hospital Drive Time', value: sub.estimatedHospitalDriveMinutes,
         display: `${sub.estimatedHospitalDriveMinutes} minutes`,
         score: sub.driveScore, tooltip: TOOLTIPS.hospitals,
       },
-      sub.hospitalCount != null && {
+      metricOrMissing(sub.hospitalCount != null, {
         name: 'Hospitals within 50 km', value: sub.hospitalCount ?? '?',
         display: `${sub.hospitalCount ?? 'Unknown'} hospital${sub.hospitalCount !== 1 ? 's' : ''}`,
         score: sub.hospScore, tooltip: TOOLTIPS.hospitals,
-      },
-      sub.pharmacyCount != null && {
+      }, 'Hospitals within 50 km', TOOLTIPS.hospitals),
+      metricOrMissing(sub.pharmacyCount != null, {
         name: 'Pharmacies within 5 km', value: sub.pharmacyCount ?? '?',
         display: `${sub.pharmacyCount ?? 'Unknown'} pharmac${sub.pharmacyCount !== 1 ? 'ies' : 'y'}`,
         score: sub.pharmScore, tooltip: TOOLTIPS.pharmacies,
-      },
-      sub.hasSpecialist != null && {
+      }, 'Pharmacies within 5 km', TOOLTIPS.pharmacies),
+      metricOrMissing(sub.hasSpecialist != null, {
         name: 'Immunology/Allergy Specialist within 20 km', value: sub.hasSpecialist,
         display: sub.hasSpecialist ? `${sub.specialistCount ?? 1} specialist${sub.specialistCount === 1 ? '' : 's'} found` : 'None found',
         score: sub.specScore, tooltip: TOOLTIPS.specialist,
-      },
+      }, 'Immunology/Allergy Specialist within 20 km', TOOLTIPS.specialist),
       sub.cmsAvgRating != null && {
         name: 'Matched CMS Hospital Quality', value: sub.cmsAvgRating,
         display: `${sub.cmsAvgRating.toFixed(1)} stars (${sub.cmsRatedCount} rated)`,
@@ -131,21 +133,21 @@ const CATEGORIES = {
     source: 'Open-Meteo Weather & Historical API',
     sourceUrl: 'https://open-meteo.com/',
     metrics: (sub) => [
-      sub.humidity != null && {
+      metricOrMissing(sub.humidity != null, {
         name: 'Average Relative Humidity', value: sub.humidity,
         display: `${sub.humidity.toFixed(0)}% RH`,
         score: sub.humScore, tooltip: TOOLTIPS.humidity,
-      },
-      sub.tempRange != null && {
+      }, 'Average Relative Humidity', TOOLTIPS.humidity),
+      metricOrMissing(sub.tempRange != null, {
         name: 'Daily Temperature Range', value: sub.tempRange,
         display: `±${sub.tempRange.toFixed(1)}°C average swing`,
         score: sub.tempScore, tooltip: TOOLTIPS.tempRange,
-      },
-      sub.pollenLevel != null && {
+      }, 'Daily Temperature Range', TOOLTIPS.tempRange),
+      metricOrMissing(sub.pollenLevel != null, {
         name: 'Pollen Level', value: sub.pollenLevel ?? 'Unknown',
         display: sub.pollenLevel ?? 'Data unavailable',
         score: sub.pollenScore, tooltip: TOOLTIPS.pollen,
-      },
+      }, 'Pollen Level', TOOLTIPS.pollen),
       sub.tailRiskScore != null && {
         name: 'Historical Climate Tail Risk', value: sub.tailRiskScore,
         display: `${sub.tailRiskScore}/100`,
@@ -207,15 +209,17 @@ function closePanel() {
 function buildBody(def, data) {
   const metrics = def.metrics(data.sub ?? {});
   const metricHtml = metrics.length ? metrics.map(m => `
-    <div class="detail-metric">
+    <div class="detail-metric ${m.available === false ? 'unavailable' : ''}">
       <div class="detail-metric-header">
-        <span class="detail-metric-name">${m.name}</span>
-        <span class="detail-metric-value" style="color:${scoreColor(m.score ?? 50)}">${m.display}</span>
+        <span class="detail-metric-name">${escHtml(m.name)}</span>
+        <span class="detail-metric-value" style="color:${scoreColor(m.score)}">${escHtml(m.display)}</span>
       </div>
-      <div class="detail-metric-bar-wrap">
-        <div class="detail-metric-bar" style="width:${m.score ?? 50}%;background:${scoreColor(m.score ?? 50)}"></div>
-      </div>
-      <p class="detail-metric-desc">${m.tooltip}</p>
+      ${m.score != null ? `
+        <div class="detail-metric-bar-wrap">
+          <div class="detail-metric-bar" style="width:${m.score}%;background:${scoreColor(m.score)}"></div>
+        </div>
+      ` : ''}
+      <p class="detail-metric-desc">${escHtml(m.tooltip)}</p>
     </div>
   `).join('') : '<p class="detail-source">No live measurements are available for this category right now.</p>';
 
@@ -238,6 +242,18 @@ function buildBody(def, data) {
   const sourceHtml = `<p class="detail-source">Source: <a href="${sourceUrlFor(source, def.sourceUrl)}" target="_blank" rel="noopener">${escHtml(source)}</a> · Retrieved ${formatTime(data.timestamp)}${confidenceHtml}</p>`;
 
   return metricHtml + contextHtml + noteHtml + sourceHtml;
+}
+
+function metricOrMissing(found, metric, name, tooltip) {
+  if (found) return metric;
+  return {
+    name,
+    value: null,
+    display: 'Not found',
+    score: null,
+    available: false,
+    tooltip: `${tooltip} This measurement was not available for the selected location and is not included in the score.`,
+  };
 }
 
 function buildContextSection(insights) {

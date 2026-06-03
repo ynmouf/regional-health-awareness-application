@@ -165,13 +165,14 @@ function renderCompare() {
 
 function renderLocationCard(result, eyebrow) {
   const label = scoreLabel(result.overall);
+  const scored = isScored(result.overall);
   return `
     <article class="compare-col">
       <div class="compare-eyebrow">${escHtml(eyebrow)}</div>
       <div class="compare-col-title">${escHtml(result.location)}</div>
-      <div class="compare-score" style="color:${scoreColor(result.overall)}">${result.overall}</div>
+      <div class="compare-score" style="color:${scoreColor(result.overall)}">${formatScore(result.overall)}</div>
       <span class="compare-badge ${label.badgeCls}">${label.label}</span>
-      ${result.risk ? `<div class="compare-meta">Confidence ${escHtml(result.risk.confidence)} · Range ${result.risk.range[0]}-${result.risk.range[1]}</div>` : ''}
+      ${result.risk ? `<div class="compare-meta">Confidence ${escHtml(result.risk.confidence)} · ${scored ? `Range ${result.risk.range[0]}-${result.risk.range[1]}` : 'Range unavailable'}</div>` : ''}
       ${result.risk?.redFlags?.length ? `<div class="compare-meta">${result.risk.redFlags.length} dealbreaker flag${result.risk.redFlags.length === 1 ? '' : 's'}</div>` : ''}
     </article>
   `;
@@ -190,14 +191,15 @@ function renderRows(left, right) {
   return FACTORS.map(factor => {
     const leftScore = factor.key === 'overall' ? left.overall : left.scores[factor.key];
     const rightScore = factor.key === 'overall' ? right.overall : right.scores[factor.key];
-    const delta = rightScore - leftScore;
-    const deltaText = delta === 0 ? 'Even' : `${delta > 0 ? '+' : ''}${delta}`;
+    const canCompare = isScored(leftScore) && isScored(rightScore);
+    const delta = canCompare ? rightScore - leftScore : null;
+    const deltaText = !canCompare ? 'N/A' : delta === 0 ? 'Even' : `${delta > 0 ? '+' : ''}${delta}`;
     const deltaCls = delta > 0 ? 'delta-better' : delta < 0 ? 'delta-worse' : 'delta-even';
     return `
       <div class="compare-row">
         <span class="compare-label">${factor.label}</span>
-        <span class="compare-val" style="color:${scoreColor(leftScore)}">${leftScore}</span>
-        <span class="compare-val" style="color:${scoreColor(rightScore)}">${rightScore}</span>
+        <span class="compare-val" style="color:${scoreColor(leftScore)}">${formatScore(leftScore)}</span>
+        <span class="compare-val" style="color:${scoreColor(rightScore)}">${formatScore(rightScore)}</span>
         <span class="compare-delta ${deltaCls}">${deltaText}</span>
       </div>
     `;
@@ -218,17 +220,20 @@ function renderHeader(left, right) {
 function renderInsights(left, right) {
   const diffs = FACTORS
     .filter(factor => factor.key !== 'overall')
+    .filter(factor => isScored(left.scores[factor.key]) && isScored(right.scores[factor.key]))
     .map(factor => ({
       ...factor,
-      delta: (right.scores[factor.key] ?? 0) - (left.scores[factor.key] ?? 0),
+      delta: right.scores[factor.key] - left.scores[factor.key],
     }))
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   const strongest = diffs[0];
-  const winner = right.overall > left.overall ? right : left.overall > right.overall ? left : null;
+  const winner = isScored(right.overall) && isScored(left.overall)
+    ? right.overall > left.overall ? right : left.overall > right.overall ? left : null
+    : null;
   const flagDiff = (right.risk?.redFlags?.length ?? 0) - (left.risk?.redFlags?.length ?? 0);
   const lines = [
     strongest && `${strongest.label} is the biggest difference (${strongest.delta > 0 ? '+' : ''}${strongest.delta} for ${shortName(right.location)}).`,
-    winner ? `${shortName(winner.location)} has the stronger adjusted score after confidence and red-flag penalties.` : 'The adjusted overall scores are even.',
+    winner ? `${shortName(winner.location)} has the stronger adjusted score after confidence and red-flag penalties.` : 'The adjusted overall scores are unavailable or even.',
     flagDiff !== 0 ? `${shortName(flagDiff > 0 ? right.location : left.location)} has more dealbreaker flags.` : 'Both locations have the same number of dealbreaker flags.',
   ].filter(Boolean);
 
@@ -249,4 +254,12 @@ function setCompareStatus(message) {
 
 function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function isScored(score) {
+  return score != null && Number.isFinite(score);
+}
+
+function formatScore(score) {
+  return isScored(score) ? score : 'N/A';
 }
