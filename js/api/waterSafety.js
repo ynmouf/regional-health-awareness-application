@@ -15,7 +15,7 @@ const FIVE_YEARS_MS = 5 * 365.25 * 24 * 60 * 60 * 1000;
 export async function fetchWaterSafety(stateCode, cityName, zipCode) {
   if (!stateCode) return null;
 
-  const cacheKey = `water_${stateCode}_${(cityName || zipCode || '').toLowerCase().replace(/\W+/g, '_')}`;
+  const cacheKey = `water_v2_${stateCode}_${(cityName || zipCode || '').toLowerCase().replace(/\W+/g, '_')}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
@@ -64,14 +64,13 @@ async function findWaterSystems(stateCode, cityName, zipCode) {
 }
 
 async function stateWideFallback(stateCode) {
-  // Count health-based violations state-wide for the last 5 years
-  const cutoff = new Date(Date.now() - FIVE_YEARS_MS).toISOString().split('T')[0];
-  const url = `${BASE}/VIOLATION/PRIMACY_AGENCY_CODE/${stateCode}/IS_HEALTH_BASED_IND/Y/rows/0:200`;
+  // Context-only sample when local systems cannot be identified. This is not scored as local risk.
+  const url = `${BASE}/VIOLATION/PRIMACY_AGENCY_CODE/${stateCode}/IS_HEALTH_BASED_IND/Y/rows/0:1000`;
   try {
     const violations = await fetchAndParseXML(url, parseViolation, 'violation');
     const recent = violations.filter(v => new Date(v.beginDate).getTime() > Date.now() - FIVE_YEARS_MS);
     const tier1 = recent.filter(v => v.tier === 1);
-    return build([], recent.length, tier1.length, 0, true);
+    return build([], recent.length, tier1.length, 0, true, true);
   } catch { return null; }
 }
 
@@ -82,7 +81,7 @@ async function fetchPWSViolations(pwsid) {
   } catch { return []; }
 }
 
-function build(systems, healthViolations5yr, tier1Count, outstandingCount, stateLevel = false) {
+function build(systems, healthViolations5yr, tier1Count, outstandingCount, stateLevel = false, partial = false) {
   return {
     systemCount: systems.length,
     healthViolations5yr,
@@ -90,10 +89,11 @@ function build(systems, healthViolations5yr, tier1Count, outstandingCount, state
     outstandingCount,
     outstandingPct: systems.length ? Math.round((outstandingCount / systems.length) * 100) : null,
     stateLevel,
+    partial,
     source: 'EPA SDWIS',
     sourceUrl: 'https://www.epa.gov/ground-water-and-drinking-water',
-    confidence: healthViolations5yr >= 0 ? (stateLevel ? 'medium' : 'high') : 'low',
-    note: stateLevel ? 'Using state-wide water violation data; city-level system not found.' : null,
+    confidence: healthViolations5yr >= 0 ? (stateLevel ? 'low' : 'high') : 'low',
+    note: stateLevel ? 'Local water systems were not identified; showing a partial state-wide EPA SDWIS sample as context only. It is not used in the score.' : null,
     timestamp: new Date().toISOString(),
   };
 }

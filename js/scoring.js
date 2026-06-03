@@ -90,6 +90,23 @@ export function scoreWaterSafety(waterData) {
   if (!waterData) return { score: 50, sub: {}, confidence: 'low' };
 
   const { healthViolations5yr, tier1Count, outstandingPct } = waterData;
+  if (waterData.stateLevel) {
+    return {
+      score: 50,
+      sub: {
+        violationScore: null,
+        tier1Score: null,
+        outstandingScore: null,
+        healthViolations5yr,
+        tier1Count,
+        outstandingPct,
+        systemCount: waterData.systemCount,
+        stateLevel: true,
+        partial: waterData.partial ?? true,
+      },
+      confidence: 'low',
+    };
+  }
 
   // Violation count score (fewer = better)
   const violationScore = (() => {
@@ -134,6 +151,8 @@ export function scoreWaterSafety(waterData) {
       violationScore, tier1Score, outstandingScore,
       healthViolations5yr, tier1Count, outstandingPct,
       systemCount: waterData.systemCount,
+      stateLevel: false,
+      partial: waterData.partial ?? false,
     },
     confidence: waterData.confidence ?? 'medium',
   };
@@ -470,10 +489,12 @@ function buildRedFlags({ categoryResults, data, geo, profile }) {
   if (['High', 'Very High'].includes(air.pollenLevel)) add('medium', 'Pollen is elevated', `${air.pollenLevel} pollen can worsen respiratory symptoms.`, 3);
   if (air.smokeScore != null && air.smokeScore < 50) add('medium', 'Wildfire-smoke tail risk', `${geo.stateCode || 'This region'} has meaningful seasonal smoke exposure risk.`, 5);
 
-  // Water safety red flags (EPA SDWIS violations)
-  if (water.tier1Count > 0) add('high', 'Acute-risk water violation in last 5 years', `${water.tier1Count} Tier 1 public notification${water.tier1Count !== 1 ? 's' : ''} issued — immediate health risk events reported.`, 9);
-  if (water.healthViolations5yr >= 5) add('high', 'Multiple water safety violations', `${water.healthViolations5yr} health-based violations in the last 5 years.`, 7);
-  if (water.healthViolations5yr >= 1 && water.healthViolations5yr < 5) add('medium', 'Recent drinking water violation', `${water.healthViolations5yr} health-based violation${water.healthViolations5yr !== 1 ? 's' : ''} reported in last 5 years.`, 5);
+  // Water safety red flags (EPA SDWIS violations). State-level context is not treated as local risk.
+  if (!water.stateLevel) {
+    if (water.tier1Count > 0) add('high', 'Acute-risk water violation in last 5 years', `${water.tier1Count} Tier 1 public notification${water.tier1Count !== 1 ? 's' : ''} issued — immediate health risk events reported.`, 9);
+    if (water.healthViolations5yr >= 5) add('high', 'Multiple water safety violations', `${water.healthViolations5yr} health-based violations in the last 5 years.`, 7);
+    if (water.healthViolations5yr >= 1 && water.healthViolations5yr < 5) add('medium', 'Recent drinking water violation', `${water.healthViolations5yr} health-based violation${water.healthViolations5yr !== 1 ? 's' : ''} reported in last 5 years.`, 5);
+  }
 
   if (healthcare.estimatedHospitalDriveMinutes >= 35) add('high', 'Long emergency travel time', `Estimated hospital drive time is ${healthcare.estimatedHospitalDriveMinutes} minutes.`, 8);
   if (healthcare.hospitalCount <= 1) add('medium', 'Limited hospital redundancy', 'Few hospital options were found in the wider search area.', 4);

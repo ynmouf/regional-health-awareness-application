@@ -22,9 +22,9 @@ const STATE_ABBR = {
 /* Returns { lat, lon, displayName, countryCode, state } or throws */
 export async function geocode(query) {
   const q = query.trim();
-  const cacheKey = `geo_${q.toLowerCase()}`;
+  const cacheKey = `geo_v2_${q.toLowerCase()}`;
   const cached = sessionGet(cacheKey);
-  if (cached) return cached;
+  if (isUsableCachedGeo(cached)) return cached;
 
   // US ZIP code shortcut
   if (/^\d{5}$/.test(q)) {
@@ -90,8 +90,16 @@ export async function suggest(query) {
       state: p.address?.state ?? '',
       stateCode: stateCode(p.address),
       county: p.address?.county ?? p.address?.city ?? '',
+      city: p.address?.city || p.address?.town || p.address?.village || p.address?.municipality || '',
+      zipCode: p.address?.postcode ?? '',
     }));
   } catch { return []; }
+}
+
+function isUsableCachedGeo(cached) {
+  if (!cached) return false;
+  if (cached.countryCode !== 'US') return true;
+  return Boolean(cached.stateCode && (cached.city || cached.zipCode));
 }
 
 function formatDisplayName(place) {

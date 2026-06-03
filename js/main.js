@@ -1,7 +1,7 @@
-import { geocode } from './geocoding.js';
+import { geocode } from './geocoding.js?v=water-fallback-20260603';
 import { fetchAirNow } from './api/airnow.js';
 import { fetchAirQuality, fetchWeather, fetchSeasonalHistory } from './api/openmeteo.js';
-import { fetchWaterSafety } from './api/waterSafety.js';
+import { fetchWaterSafety } from './api/waterSafety.js?v=water-fallback-20260603';
 import { fetchHealthcare } from './api/overpass.js';
 import { fetchGoogleHealthcare } from './api/googleHealthcare.js';
 import { fetchGooglePollen, mergePollen } from './api/googlePollen.js';
@@ -9,12 +9,12 @@ import { fetchCMSHospitalQuality } from './api/cms.js';
 import {
   scoreAirQuality, scoreWaterSafety, scoreHealthcare, scoreClimate,
   buildRiskAssessment,
-} from './scoring.js';
+} from './scoring.js?v=water-fallback-20260603';
 import { getWeights, initWeightSliders, getAlertThreshold, getActiveProfile } from './weights.js';
 import { initSearch } from './ui/search.js';
 import { initLightbox } from './ui/lightbox.js';
 import { renderOverall, renderCategoryCard, renderRadarChart, updateRadarChart, renderRiskIntelligence } from './ui/scoreCard.js';
-import { initDetailPanel, setDetailData } from './ui/detailPanel.js';
+import { initDetailPanel, setDetailData } from './ui/detailPanel.js?v=water-fallback-20260603';
 import { renderSeasonalCalendar } from './ui/seasonalCalendar.js';
 import { renderLocationImages } from './ui/locationImages.js';
 import { initComparePanel, openCompare } from './ui/comparePanel.js';
@@ -112,9 +112,7 @@ async function handleSearch(query, preResolved) {
 
 async function buildAssessment(query, preResolved, options = {}) {
   const { includePhotos = false, includeSeasonal = false } = options;
-  const geo = preResolved
-    ? { ...preResolved, displayName: preResolved.displayName ?? preResolved.label }
-    : await geocode(query);
+  const geo = await resolveGeo(query, preResolved);
 
   const [airNow, openMeteoAQ, googlePollen, weather, waterData, healthcare, seasonal, photos] = await Promise.all([
     geo.countryCode === 'US' ? fetchAirNow(geo.lat, geo.lon) : Promise.resolve(null),
@@ -170,6 +168,19 @@ function getGooglePlacesKey() {
 
 function getGooglePollenKey() {
   return window.GOOGLE_POLLEN_KEY || window.GOOGLE_MAPS_KEY || '';
+}
+
+async function resolveGeo(query, preResolved) {
+  if (!preResolved) return geocode(query);
+  const geo = { ...preResolved, displayName: preResolved.displayName ?? preResolved.label };
+  if (geo.countryCode === 'US' && !geo.city && !geo.zipCode) {
+    try {
+      return await geocode(geo.displayName ?? query);
+    } catch {
+      return geo;
+    }
+  }
+  return geo;
 }
 
 // ── Weight change handler ────────────────────────────
@@ -311,6 +322,9 @@ function waterSummary(sub, waterData) {
   if (!waterData) return 'EPA drinking water data unavailable for this location (US only).';
   const v = sub?.healthViolations5yr ?? 0;
   const t = sub?.tier1Count ?? 0;
+  if (waterData.stateLevel) {
+    return `Statewide context only: ${v} health violation${v !== 1 ? 's' : ''} (5 yr)${t > 0 ? ` · ${t} acute-risk` : ''} · not scored`;
+  }
   const parts = [`${v} health violation${v !== 1 ? 's' : ''} (5 yr)`];
   if (t > 0) parts.push(`${t} acute-risk`);
   if (sub?.outstandingPct != null) parts.push(`${sub.outstandingPct}% outstanding`);
@@ -377,4 +391,3 @@ function airNote(geo, airResult) {
   if (geo.countryCode !== 'US') return 'AirNow data is US-only; using modeled AQI where available.';
   return null;
 }
-

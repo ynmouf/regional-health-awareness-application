@@ -1,12 +1,13 @@
 # Health Location Scorer
 
-A browser app that helps immunocompromised people assess whether a location is safe to live in. Combines air quality, infectious disease risk, healthcare access, and climate data into a single risk score.
+A browser app that helps immunocompromised people assess whether a location is safer to live in. Combines air quality, drinking water safety, healthcare access, and climate/allergen data into a single risk score.
 
 ## Features
 
 - **City/ZIP search with autocomplete** — type "Denver, CO" or "10001"
-- **4-factor risk assessment** — air quality, infection risk (flu/COVID), healthcare access, climate & allergens
+- **4-factor risk assessment** — air quality, drinking water safety, healthcare access, climate & allergens
 - **Overall safety score** — 0–100, with risk label (Low/Moderate/Elevated/High/Severe)
+- **Confidence-adjusted scoring** — shows a score range, data confidence, and dealbreaker flags
 - **Customizable weights** — drag sliders to prioritize the factors that matter most for your condition
 - **Seasonal calendar** — 12-month heatmap showing which months are safest
 - **Compare mode** — side-by-side scoring for two cities or ZIP codes
@@ -101,8 +102,9 @@ git push origin main
 | Geocoding | Nominatim (OpenStreetMap) | Global |
 | Air Quality | AirNow (EPA) + Open-Meteo | US (AirNow); global (Open-Meteo) |
 | Pollen | Google Pollen API + Open-Meteo | Optional keyed Google; global Open-Meteo fallback |
-| Respiratory disease | CDC ARI Activity, RESP-NET | US only (state level) |
+| Drinking water safety | EPA SDWIS | US public water systems |
 | Healthcare facilities | Google Places + Overpass API (OSM) | Optional keyed Google; global OSM fallback |
+| Hospital quality | CMS Provider Data Catalog + local proxy | US CMS data where browser-accessible |
 | Climate | Open-Meteo Weather API | Global |
 | Historical seasonal | Open-Meteo Historical API | Global |
 
@@ -142,7 +144,7 @@ Each of the 4 factors is normalized to 0–100 (100 = safest). Final score is a 
 
 ### Default Weights
 - **Air Quality** 25%
-- **Infection Risk** 30%
+- **Drinking Water Safety** 30%
 - **Healthcare Access** 30%
 - **Climate & Allergens** 15%
 
@@ -155,15 +157,18 @@ Users can customize these in the Settings panel.
 - PM2.5 µg/m³ linear inverse
 - Pollen level (None/Low/Moderate/High/Very High)
 
-**Infection Risk (30%)**
-- CDC acute respiratory illness (ARI) activity level
-- Combined respiratory hospitalization rate per 100k
-- COVID-19, flu, and RSV hospitalization rates per 100k
+**Drinking Water Safety (30%)**
+- EPA SDWIS health-based violations for local public water systems
+- Tier 1 acute-risk public notifications
+- EPA Outstanding Performer share where available
+- Statewide SDWIS fallback is shown only as context and is not scored as local risk
 
 **Healthcare Access (30%)**
 - Nearest hospital distance within a 50 km search radius
+- Estimated drive-time bands
 - Pharmacy count within 5 km
 - Immunology/allergy specialist within 20 km
+- CMS hospital ratings where available, otherwise a local quality proxy
 
 **Climate & Allergens (15%)**
 - Relative humidity (ideal 30–55%)
@@ -172,16 +177,16 @@ Users can customize these in the Settings panel.
 
 ## Caveats
 
-- **CDC data is state-level, not city-level** — reflects your state average, not your specific neighborhood
+- **EPA SDWIS is US-only** — non-US locations show water data as unavailable
+- **Statewide water fallback is context-only** — it is not scored as local drinking water risk
 - **Google Places/Pollen are optional keyed APIs** — without keys, the app uses OpenStreetMap and Open-Meteo fallbacks
 - **Open-Meteo pollen data is modeled** — species coverage varies by region
 - **Overpass queries can be slow** — results are cached for 24h locally when Google Places is unavailable
-- **No real-time disease data** — CDC respiratory datasets update weekly, so rapidly changing outbreaks may lag
 
 ## Privacy
 
 - **No tracking** — all computation happens in your browser
-- **No data sent to our servers** — only to configured/public APIs (Nominatim, AirNow, Open-Meteo, CDC, Google APIs, Overpass)
+- **No data sent to our servers** — only to configured/public APIs (Nominatim, AirNow, Open-Meteo, EPA, CMS, Google APIs, Overpass)
 - **Results stored locally** — settings and alert thresholds saved in `localStorage`; clear your browser cache to reset
 
 ## Accessibility

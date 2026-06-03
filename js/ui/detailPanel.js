@@ -50,16 +50,20 @@ const CATEGORIES = {
     sourceUrl: 'https://www.epa.gov/ground-water-and-drinking-water',
     metrics: (sub) => [
       sub.healthViolations5yr != null && {
-        name: 'Health-Based Violations (5 Years)', value: sub.healthViolations5yr,
-        display: `${sub.healthViolations5yr} violation${sub.healthViolations5yr !== 1 ? 's' : ''}`,
+        name: sub.stateLevel ? 'Statewide Health-Based Violations (Context)' : 'Health-Based Violations (5 Years)', value: sub.healthViolations5yr,
+        display: `${sub.healthViolations5yr} violation${sub.healthViolations5yr !== 1 ? 's' : ''}${sub.stateLevel ? ' statewide' : ''}`,
         score: sub.violationScore,
-        tooltip: 'Count of Maximum Contaminant Level (MCL) and other health-based violations in the last 5 years for public water systems serving this area. Immunocompromised people face severe risk from contaminants that healthy immune systems manage without symptoms.',
+        tooltip: sub.stateLevel
+          ? 'Statewide SDWIS violations are context only and are not scored as local water risk.'
+          : 'Count of Maximum Contaminant Level (MCL) and other health-based violations in the last 5 years for public water systems serving this area. Immunocompromised people face severe risk from contaminants that healthy immune systems manage without symptoms.',
       },
       sub.tier1Count != null && {
-        name: 'Acute Risk Violations (Tier 1)', value: sub.tier1Count,
-        display: sub.tier1Count === 0 ? 'None found ✓' : `${sub.tier1Count} acute-risk violation${sub.tier1Count !== 1 ? 's' : ''}`,
+        name: sub.stateLevel ? 'Statewide Acute Risk Violations (Context)' : 'Acute Risk Violations (Tier 1)', value: sub.tier1Count,
+        display: sub.tier1Count === 0 ? 'None found' : `${sub.tier1Count} acute-risk violation${sub.tier1Count !== 1 ? 's' : ''}${sub.stateLevel ? ' statewide' : ''}`,
         score: sub.tier1Score,
-        tooltip: 'Tier 1 public notifications are required when there is an immediate risk to public health — including bacteria (E. coli, coliforms), nitrites, and other acute contaminants that are immediately dangerous for immunocompromised individuals.',
+        tooltip: sub.stateLevel
+          ? 'Statewide Tier 1 notices are context only and are not scored as local water risk.'
+          : 'Tier 1 public notifications are required when there is an immediate risk to public health — including bacteria (E. coli, coliforms), nitrites, and other acute contaminants that are immediately dangerous for immunocompromised individuals.',
       },
       sub.outstandingPct != null && {
         name: 'Outstanding Performer Systems', value: sub.outstandingPct,
