@@ -43,6 +43,8 @@ export function renderLocationImages(placePhotos, lat, lon, locationName) {
   container.hidden = false;
 }
 
+const GRID_COLS = 3; // fixed columns — ensures no empty gaps
+
 function renderCollageInto(panel, photos) {
   // First photo as hero
   const hero = document.createElement('div');
@@ -50,18 +52,21 @@ function renderCollageInto(panel, photos) {
   hero.innerHTML = buildPhotoCard(photos[0]);
   panel.appendChild(hero);
 
-  // Remaining photos in a grid (up to 5 more)
-  if (photos.length > 1) {
-    const grid = document.createElement('div');
-    grid.className = 'collage-grid';
-    photos.slice(1, 6).forEach(photo => {
-      const cell = document.createElement('div');
-      cell.className = 'collage-cell';
-      cell.innerHTML = buildPhotoCard(photo);
-      grid.appendChild(cell);
-    });
-    panel.appendChild(grid);
-  }
+  const remaining = photos.slice(1);
+  if (!remaining.length) return;
+
+  // Trim to nearest multiple of GRID_COLS so no empty cells
+  const count = Math.floor(remaining.length / GRID_COLS) * GRID_COLS || remaining.length;
+  const grid = document.createElement('div');
+  grid.className = 'collage-grid';
+  grid.style.gridTemplateColumns = `repeat(${GRID_COLS}, 1fr)`;
+  remaining.slice(0, count).forEach(photo => {
+    const cell = document.createElement('div');
+    cell.className = 'collage-cell';
+    cell.innerHTML = buildPhotoCard(photo);
+    grid.appendChild(cell);
+  });
+  panel.appendChild(grid);
 }
 
 function buildPhotoCard(photo) {

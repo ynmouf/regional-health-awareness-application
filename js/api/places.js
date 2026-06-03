@@ -27,7 +27,7 @@ export async function fetchPlacePhotos(locationName, apiKey) {
     if (!place?.photos?.length) return null;
 
     // Step 2: Build photo URLs from photo resource names (up to 6)
-    const photos = place.photos.slice(0, 6).map(photo => ({
+    const photos = place.photos.slice(0, 7).map(photo => ({
       url: `${BASE}/${photo.name}/media?maxWidthPx=800&key=${encodeURIComponent(apiKey)}`,
       alt: photo.authorAttributions?.[0]?.displayName
         ? `Photo by ${photo.authorAttributions[0].displayName}`
