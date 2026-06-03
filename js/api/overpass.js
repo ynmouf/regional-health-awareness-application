@@ -15,7 +15,7 @@ export async function fetchHealthcare(lat, lon) {
   const coords = validateCoords(lat, lon);
   lat = coords.lat; lon = coords.lon;
 
-  const key = `overpass_v2_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const key = `overpass_v3_${lat.toFixed(2)}_${lon.toFixed(2)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
@@ -43,12 +43,21 @@ export async function fetchHealthcare(lat, lon) {
       (e.tags?.name && /immunol|allerg/i.test(e.tags.name))
     );
     const nearestHospital = hospitals[0] ?? null;
+    const specialistCount = elements.filter(e =>
+      e.tags?.['healthcare:speciality'] === 'immunology' ||
+      e.tags?.['healthcare:speciality'] === 'allergy' ||
+      e.tags?.['healthcare:speciality'] === 'allergy_and_immunology' ||
+      e.tags?.['medical_system:speciality'] === 'immunology' ||
+      (e.tags?.name && /immunol|allerg/i.test(e.tags.name))
+    ).length;
 
     const result = {
       hospitalCount: hospitals.length,
       pharmacyCount: pharmacies.length,
+      specialistCount,
       hasSpecialist,
       nearestHospitalKm: nearestHospital?.distanceKm ?? null,
+      estimatedHospitalDriveMinutes: nearestHospital?.distanceKm != null ? estimateDriveMinutes(nearestHospital.distanceKm) : null,
       nearestHospitalName: nearestHospital?.tags?.name ?? null,
       urgentCareCount: urgentCare.length,
       hospitals: hospitals.slice(0, 10).map(e => ({
@@ -67,7 +76,7 @@ export async function fetchHealthcare(lat, lon) {
   } catch {
     return {
       hospitalCount: null, pharmacyCount: null, hasSpecialist: false,
-      nearestHospitalKm: null, nearestHospitalName: null, urgentCareCount: null,
+      specialistCount: null, nearestHospitalKm: null, estimatedHospitalDriveMinutes: null, nearestHospitalName: null, urgentCareCount: null,
       hospitals: [], pharmacies: [],
       source: 'OpenStreetMap (Overpass API)',
       confidence: 'low',
@@ -131,4 +140,10 @@ function distanceKm(lat1, lon1, lat2, lon2) {
 
 function toRad(deg) {
   return deg * Math.PI / 180;
+}
+
+function estimateDriveMinutes(distanceKm) {
+  if (distanceKm == null) return null;
+  const averageKmh = distanceKm < 10 ? 32 : distanceKm < 30 ? 48 : 64;
+  return Math.round((distanceKm / averageKmh) * 60 + 6);
 }

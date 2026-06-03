@@ -116,10 +116,12 @@ export function getHealthcareContext(hcResult, geo) {
 
 export function getClimateContext(climateResult, monthlyData, geo) {
   const insights = [];
+  const months = Array.isArray(monthlyData) ? monthlyData : monthlyData?.months;
+  const summary = monthlyData?.summary;
 
   // Find best and worst months
-  if (monthlyData && monthlyData.length === 12) {
-    const scored = monthlyData.map((m, i) => ({
+  if (months && months.length === 12) {
+    const scored = months.map((m, i) => ({
       month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
       score: scoreMonth(m),
       data: m
@@ -154,6 +156,21 @@ export function getClimateContext(climateResult, monthlyData, geo) {
       icon: '❄️',
       title: 'Extreme Cold',
       text: `Temperatures drop below -10°C (14°F). Cold stress weakens immune function; limit outdoor exposure.`
+    });
+  }
+
+  if (summary?.heatDays35C >= 10) {
+    insights.push({
+      icon: '🔥',
+      title: 'Frequent Heat Extremes',
+      text: `${summary.heatDays35C} days/year exceeded 35°C in recent historical data. Heat waves can make otherwise high-scoring locations unsafe.`
+    });
+  }
+  if (summary?.humidDays70 >= 45) {
+    insights.push({
+      icon: '💧',
+      title: 'Persistent Humidity',
+      text: `${summary.humidDays70} high-humidity days/year suggest higher mold and indoor air-quality management needs.`
     });
   }
 

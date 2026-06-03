@@ -3,7 +3,7 @@ import { scoreColor, scoreLabel } from '../scoring.js';
 const FACTORS = [
   { key: 'overall', label: 'Overall' },
   { key: 'air', label: 'Air Quality' },
-  { key: 'infection', label: 'Infection Risk' },
+  { key: 'water', label: 'Water Safety' },
   { key: 'healthcare', label: 'Healthcare' },
   { key: 'climate', label: 'Climate & Allergens' },
 ];
@@ -67,7 +67,7 @@ function renderCompare() {
     secondary ? renderLocationCard(secondary, 'Comparison region') : renderEmptyCard(),
   ].join('');
 
-  table.innerHTML = secondary ? renderHeader(primary, secondary) + renderRows(primary, secondary) : '';
+  table.innerHTML = secondary ? renderHeader(primary, secondary) + renderRows(primary, secondary) + renderInsights(primary, secondary) : '';
 }
 
 function renderLocationCard(result, eyebrow) {
@@ -78,6 +78,8 @@ function renderLocationCard(result, eyebrow) {
       <div class="compare-col-title">${escHtml(result.location)}</div>
       <div class="compare-score" style="color:${scoreColor(result.overall)}">${result.overall}</div>
       <span class="compare-badge ${label.badgeCls}">${label.label}</span>
+      ${result.risk ? `<div class="compare-meta">Confidence ${escHtml(result.risk.confidence)} · Range ${result.risk.range[0]}-${result.risk.range[1]}</div>` : ''}
+      ${result.risk?.redFlags?.length ? `<div class="compare-meta">${result.risk.redFlags.length} dealbreaker flag${result.risk.redFlags.length === 1 ? '' : 's'}</div>` : ''}
     </article>
   `;
 }
@@ -116,6 +118,30 @@ function renderHeader(left, right) {
       <span>${escHtml(shortName(left.location))}</span>
       <span>${escHtml(shortName(right.location))}</span>
       <span>Diff</span>
+    </div>
+  `;
+}
+
+function renderInsights(left, right) {
+  const diffs = FACTORS
+    .filter(factor => factor.key !== 'overall')
+    .map(factor => ({
+      ...factor,
+      delta: (right.scores[factor.key] ?? 0) - (left.scores[factor.key] ?? 0),
+    }))
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const strongest = diffs[0];
+  const winner = right.overall > left.overall ? right : left.overall > right.overall ? left : null;
+  const flagDiff = (right.risk?.redFlags?.length ?? 0) - (left.risk?.redFlags?.length ?? 0);
+  const lines = [
+    strongest && `${strongest.label} is the biggest difference (${strongest.delta > 0 ? '+' : ''}${strongest.delta} for ${shortName(right.location)}).`,
+    winner ? `${shortName(winner.location)} has the stronger adjusted score after confidence and red-flag penalties.` : 'The adjusted overall scores are even.',
+    flagDiff !== 0 ? `${shortName(flagDiff > 0 ? right.location : left.location)} has more dealbreaker flags.` : 'Both locations have the same number of dealbreaker flags.',
+  ].filter(Boolean);
+
+  return `
+    <div class="compare-insights">
+      ${lines.map(line => `<p>${escHtml(line)}</p>`).join('')}
     </div>
   `;
 }

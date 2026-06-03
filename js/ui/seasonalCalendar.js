@@ -5,13 +5,14 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 export function renderSeasonalCalendar(monthlyData) {
   const container = document.getElementById('seasonal-calendar');
   container.innerHTML = '';
+  const months = Array.isArray(monthlyData) ? monthlyData : monthlyData?.months;
 
-  if (!monthlyData || !monthlyData.length) {
+  if (!months || !months.length) {
     container.innerHTML = '<p style="color:var(--text-3);font-size:.85rem;grid-column:1/-1">Seasonal data unavailable for this location.</p>';
     return;
   }
 
-  monthlyData.forEach((data, i) => {
+  months.forEach((data, i) => {
     const score = monthlyRiskScore(data);
     const color = scoreColor(score);
     const cell = document.createElement('div');

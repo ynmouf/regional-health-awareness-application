@@ -5,7 +5,7 @@ const BASE = 'https://places.googleapis.com/v1';
 export async function fetchGoogleHealthcare(lat, lon, apiKey) {
   if (!apiKey) return null;
 
-  const key = `g_healthcare_v2_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const key = `g_healthcare_v3_${lat.toFixed(2)}_${lon.toFixed(2)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
@@ -25,8 +25,10 @@ export async function fetchGoogleHealthcare(lat, lon, apiKey) {
     const result = {
       hospitalCount: hospitals.length,
       pharmacyCount: pharmacies.length,
+      specialistCount: specialists.length,
       hasSpecialist: specialists.length > 0,
       nearestHospitalKm: nearestHospital?.distanceKm ?? null,
+      estimatedHospitalDriveMinutes: nearestHospital?.distanceKm != null ? estimateDriveMinutes(nearestHospital.distanceKm) : null,
       nearestHospitalName: nearestHospital?.displayName?.text ?? null,
       urgentCareCount: 0,
       hospitals: hospitalsByDistance.slice(0, 10).map(placeSummary),
@@ -61,7 +63,7 @@ async function nearbySearch(lat, lon, apiKey, type, radiusMeters) {
       },
     }),
   });
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`Google Places ${type} search failed: ${res.status}`);
   const data = await res.json();
   return data.places ?? [];
 }
@@ -84,7 +86,7 @@ async function specialistSearch(lat, lon, apiKey) {
       },
     }),
   });
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`Google Places specialist search failed: ${res.status}`);
   const data = await res.json();
   return (data.places ?? []).filter(place => {
     const name = place.displayName?.text ?? '';
@@ -114,4 +116,10 @@ function distanceMeters(lat, lon, location) {
 
 function toRad(deg) {
   return deg * Math.PI / 180;
+}
+
+function estimateDriveMinutes(distanceKm) {
+  if (distanceKm == null) return null;
+  const averageKmh = distanceKm < 10 ? 32 : distanceKm < 30 ? 48 : 64;
+  return Math.round((distanceKm / averageKmh) * 60 + 6);
 }

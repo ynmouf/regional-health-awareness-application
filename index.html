@@ -9,6 +9,7 @@
     script-src 'self' https://cdn.jsdelivr.net https://unpkg.com;
     img-src 'self' https://maps.googleapis.com https://places.googleapis.com https://lh3.googleusercontent.com https://upload.wikimedia.org https://commons.wikimedia.org https://*.arcgisonline.com https://*.tile.openstreetmap.org data:;
     connect-src 'self'
+      https://data.epa.gov
       https://places.googleapis.com
       https://pollen.googleapis.com
       https://*.arcgisonline.com
@@ -20,6 +21,7 @@
       https://api.open-meteo.com
       https://archive-api.open-meteo.com
       https://data.cdc.gov
+      https://data.cms.gov
       https://overpass-api.de
       https://commons.wikimedia.org;
     style-src 'self' 'unsafe-inline';
@@ -129,10 +131,23 @@
               <span class="score-number" id="score-number">—</span>
               <span class="score-badge" id="score-badge"></span>
             </div>
+            <div class="score-meta" id="score-meta" hidden>
+              <span id="score-confidence"></span>
+              <span id="score-range"></span>
+              <span id="score-completeness"></span>
+            </div>
           </div>
           <div class="overall-right">
             <canvas id="radar-chart" width="220" height="220" aria-label="Radar chart of category scores"></canvas>
           </div>
+        </div>
+
+        <div id="risk-intelligence" class="risk-intelligence" hidden>
+          <div>
+            <h2 class="section-title">Risk Intelligence</h2>
+            <p class="section-sub">Dealbreakers and context that can override a high average score.</p>
+          </div>
+          <div id="red-flag-list" class="red-flag-list"></div>
         </div>
 
         <!-- Category Cards -->
@@ -152,19 +167,19 @@
             <button class="card-details-btn" data-target="air" aria-expanded="false">View details</button>
           </article>
 
-          <article class="category-card" id="card-infection" role="listitem" tabindex="0" aria-label="Infection Risk score">
+          <article class="category-card" id="card-water" role="listitem" tabindex="0" aria-label="Water Safety score">
             <div class="card-header">
-              <div class="card-icon infection-icon" aria-hidden="true">🦠</div>
+              <div class="card-icon water-icon" aria-hidden="true">💧</div>
               <div>
-                <h3 class="card-title">Infection Risk</h3>
-                <span class="confidence-badge" id="conf-infection"></span>
+                <h3 class="card-title">Water Safety</h3>
+                <span class="confidence-badge" id="conf-water"></span>
               </div>
-              <span class="card-score" id="score-infection">—</span>
+              <span class="card-score" id="score-water">—</span>
             </div>
-            <div class="card-bar-wrap"><div class="card-bar" id="bar-infection"></div></div>
-            <p class="card-summary" id="summary-infection"></p>
-            <p class="card-data-confidence" id="data-conf-infection"></p>
-            <button class="card-details-btn" data-target="infection" aria-expanded="false">View details</button>
+            <div class="card-bar-wrap"><div class="card-bar" id="bar-water"></div></div>
+            <p class="card-summary" id="summary-water"></p>
+            <p class="card-data-confidence" id="data-conf-water"></p>
+            <button class="card-details-btn" data-target="water" aria-expanded="false">View details</button>
           </article>
 
           <article class="category-card" id="card-healthcare" role="listitem" tabindex="0" aria-label="Healthcare Access score">
@@ -257,6 +272,19 @@
       </button>
       <h2 id="settings-title">Customize Risk Weights</h2>
       <p class="settings-sub">Adjust which factors matter most for your specific condition. Weights auto-balance to 100%.</p>
+      <h3 class="settings-subtitle">Condition Profile</h3>
+      <div class="profile-row">
+        <label for="condition-profile">Profile</label>
+        <select id="condition-profile" aria-label="Condition profile">
+          <option value="general">General immunocompromised</option>
+          <option value="transplant">Transplant / severe immunosuppression</option>
+          <option value="oncology">Chemo / oncology</option>
+          <option value="respiratory">Respiratory vulnerability</option>
+          <option value="autoimmune">Autoimmune biologics</option>
+          <option value="allergy">Allergy / asthma dominant</option>
+        </select>
+      </div>
+      <p class="settings-sub" id="profile-description"></p>
       <div class="weight-sliders" id="weight-sliders">
         <div class="weight-row">
           <label for="w-air">🌬️ Air Quality</label>
@@ -264,9 +292,9 @@
           <span class="weight-pct" id="pct-air">25%</span>
         </div>
         <div class="weight-row">
-          <label for="w-infection">🦠 Infection Risk</label>
-          <input type="range" id="w-infection" min="5" max="70" value="30" data-factor="infection" aria-label="Infection risk weight" />
-          <span class="weight-pct" id="pct-infection">30%</span>
+          <label for="w-water">💧 Water Safety</label>
+          <input type="range" id="w-water" min="5" max="70" value="30" data-factor="water" aria-label="Drinking water safety weight" />
+          <span class="weight-pct" id="pct-water">30%</span>
         </div>
         <div class="weight-row">
           <label for="w-healthcare">🏥 Healthcare Access</label>

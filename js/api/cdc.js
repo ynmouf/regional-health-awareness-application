@@ -52,7 +52,8 @@ export async function fetchCDCData(stateCode) {
     timestamp: new Date().toISOString(),
   };
 
-  cacheSet(cacheKey, result, 12 * 60 * 60 * 1000); // 12h — CDC updates weekly
+  const hasMeasurements = ariData || hasRespMeasurements(respData);
+  cacheSet(cacheKey, result, hasMeasurements ? 12 * 60 * 60 * 1000 : 30 * 60 * 1000); // CDC updates weekly; retry empty/error states sooner
   return result;
 }
 
@@ -116,4 +117,13 @@ async function fetchRespNetRates(stateName) {
 function rate(row) {
   const n = parseFloat(row?.weekly_rate);
   return Number.isFinite(n) ? n : null;
+}
+
+function hasRespMeasurements(data = {}) {
+  return [
+    data.combinedHospRate,
+    data.covidHospRate,
+    data.fluHospRate,
+    data.rsvHospRate,
+  ].some(v => v != null);
 }

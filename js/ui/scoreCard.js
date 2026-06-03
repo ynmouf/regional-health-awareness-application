@@ -2,7 +2,7 @@ import { scoreLabel, scoreColor } from '../scoring.js';
 
 let radarChart = null;
 
-export function renderOverall(location, overallScore) {
+export function renderOverall(location, overallScore, risk = null, profile = null) {
   const lbl = scoreLabel(overallScore);
   const color = scoreColor(overallScore);
 
@@ -19,6 +19,37 @@ export function renderOverall(location, overallScore) {
   const fill = document.getElementById('gauge-fill');
   fill.style.width = `${overallScore}%`;
   fill.style.background = color;
+
+  const meta = document.getElementById('score-meta');
+  if (meta && risk) {
+    meta.hidden = false;
+    document.getElementById('score-confidence').textContent = `Confidence ${risk.confidence}`;
+    document.getElementById('score-range').textContent = `Range ${risk.range[0]}-${risk.range[1]}`;
+    document.getElementById('score-completeness').textContent =
+      `${risk.dataCompleteness.used}/${risk.dataCompleteness.total} strong data categories · ${profile?.label ?? 'General profile'}`;
+  } else if (meta) {
+    meta.hidden = true;
+  }
+}
+
+export function renderRiskIntelligence(risk) {
+  const section = document.getElementById('risk-intelligence');
+  const list = document.getElementById('red-flag-list');
+  if (!section || !list || !risk) return;
+
+  const flags = risk.redFlags ?? [];
+  section.hidden = false;
+  if (!flags.length) {
+    list.innerHTML = '<div class="red-flag-item low"><strong>No dealbreaker flags found.</strong><span>Review detail panels before making a health decision.</span></div>';
+    return;
+  }
+
+  list.innerHTML = flags.slice(0, 6).map(flag => `
+    <div class="red-flag-item ${escAttr(flag.severity)}">
+      <strong>${escHtml(flag.title)}</strong>
+      <span>${escHtml(flag.text)}</span>
+    </div>
+  `).join('');
 }
 
 export function renderCategoryCard(id, score, summary, confidence) {
@@ -52,12 +83,20 @@ function formatConfidence(confidence) {
   return value ? value[0].toUpperCase() + value.slice(1) : 'Unknown';
 }
 
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(str) {
+  return String(str).replace(/[^a-z0-9_-]/gi, '');
+}
+
 export function renderRadarChart(scores) {
   const ctx = document.getElementById('radar-chart').getContext('2d');
   const data = {
-    labels: ['Air Quality', 'Infection Risk', 'Healthcare', 'Climate'],
+    labels: ['Air Quality', 'Toxin Burden', 'Healthcare', 'Climate'],
     datasets: [{
-      data: [scores.air, scores.infection, scores.healthcare, scores.climate],
+      data: [scores.air, scores.water, scores.healthcare, scores.climate],
       backgroundColor: 'rgba(79,110,247,.15)',
       borderColor: 'rgba(79,110,247,.8)',
       borderWidth: 2,
@@ -86,6 +125,6 @@ export function renderRadarChart(scores) {
 
 export function updateRadarChart(scores) {
   if (!radarChart) { renderRadarChart(scores); return; }
-  radarChart.data.datasets[0].data = [scores.air, scores.infection, scores.healthcare, scores.climate];
+  radarChart.data.datasets[0].data = [scores.air, scores.water, scores.healthcare, scores.climate];
   radarChart.update('active');
 }

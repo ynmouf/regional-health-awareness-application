@@ -1,7 +1,10 @@
+import { PROFILES, getProfile } from './profiles.js';
+
 const STORAGE_KEY = 'hls_weights';
 const ALERT_KEY = 'hls_alert_threshold';
+const PROFILE_KEY = 'hls_condition_profile';
 
-const DEFAULTS = { air: 25, infection: 30, healthcare: 30, climate: 15 };
+const DEFAULTS = { air: 25, water: 30, healthcare: 30, climate: 15 };
 
 export function getWeights() {
   try {
@@ -9,9 +12,26 @@ export function getWeights() {
     if (!raw) return { ...DEFAULTS };
     const w = JSON.parse(raw);
     // Validate all keys present and numeric
-    if (['air','infection','healthcare','climate'].every(k => typeof w[k] === 'number')) return w;
+    if (['air','water','healthcare','climate'].every(k => typeof w[k] === 'number')) return w;
   } catch { }
   return { ...DEFAULTS };
+}
+
+export function getActiveProfileId() {
+  try {
+    const id = localStorage.getItem(PROFILE_KEY);
+    return PROFILES[id] ? id : 'general';
+  } catch {
+    return 'general';
+  }
+}
+
+export function getActiveProfile() {
+  return getProfile(getActiveProfileId());
+}
+
+export function saveActiveProfile(profileId) {
+  try { localStorage.setItem(PROFILE_KEY, profileId); } catch { }
 }
 
 export function saveWeights(w) {
@@ -39,7 +59,14 @@ export function saveAlertThreshold(val) {
 
 /* Initialises sliders in settings panel and wires up live recalculation */
 export function initWeightSliders(weights, onChangeCallback) {
-  const factors = ['air', 'infection', 'healthcare', 'climate'];
+  const factors = ['air', 'water', 'healthcare', 'climate'];
+  const profileSelect = document.getElementById('condition-profile');
+  const profileDescription = document.getElementById('profile-description');
+
+  function syncProfileDescription() {
+    const profile = getProfile(profileSelect?.value);
+    if (profileDescription) profileDescription.textContent = profile.description;
+  }
 
   factors.forEach(f => {
     const slider = document.getElementById(`w-${f}`);
@@ -54,6 +81,23 @@ export function initWeightSliders(weights, onChangeCallback) {
       onChangeCallback({ ...weights });
     });
   });
+
+  if (profileSelect) {
+    profileSelect.value = getActiveProfileId();
+    syncProfileDescription();
+    profileSelect.addEventListener('change', () => {
+      const profile = getProfile(profileSelect.value);
+      saveActiveProfile(profileSelect.value);
+      Object.assign(weights, profile.weights);
+      saveWeights({ ...weights });
+      factors.forEach(f => {
+        document.getElementById(`w-${f}`).value = weights[f];
+        document.getElementById(`pct-${f}`).textContent = weights[f] + '%';
+      });
+      syncProfileDescription();
+      onChangeCallback({ ...weights });
+    });
+  }
 
   document.getElementById('btn-reset-weights').addEventListener('click', () => {
     const w = resetWeights();

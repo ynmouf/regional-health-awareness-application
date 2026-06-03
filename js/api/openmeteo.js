@@ -84,15 +84,16 @@ export async function fetchWeather(lat, lon) {
   } catch { return null; }
 }
 
-/* Historical monthly data for seasonal calendar — returns array of 12 monthly scores */
+/* Historical monthly data for seasonal calendar plus tail-risk summary */
 export async function fetchSeasonalHistory(lat, lon) {
-  const key = `om_hist_v2_${lat.toFixed(1)}_${lon.toFixed(1)}`;
+  const key = `om_hist_v4_${lat.toFixed(1)}_${lon.toFixed(1)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
   try {
     const endYear = new Date().getFullYear() - 1;
     const startYear = endYear - 2;
+    const historyYears = endYear - startYear + 1;
     const url = `${HIST_BASE}?latitude=${lat}&longitude=${lon}` +
       `&start_date=${startYear}-01-01&end_date=${endYear}-12-31` +
       `&daily=temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean` +
@@ -110,19 +111,54 @@ export async function fetchSeasonalHistory(lat, lon) {
       return null;
     }
 
-    const months = Array.from({ length: 12 }, (_, i) => ({ tempRanges: [], humidity: [] }));
+    const months = Array.from({ length: 12 }, () => ({ tempRanges: [], humidity: [], maxTemps: [], minTemps: [] }));
+    const summary = {
+      heatDays35C: 0,
+      heatDays32C: 0,
+      coldDaysMinus10C: 0,
+      humidDays70: 0,
+      dryDays25: 0,
+      swingDays25C: 0,
+      observedDays: 0,
+    };
     d.daily.time.forEach((dateStr, i) => {
       const month = parseInt(dateStr.split('-')[1], 10) - 1;
-      const range = d.daily.temperature_2m_max[i] - d.daily.temperature_2m_min[i];
-      if (!isNaN(range)) months[month].tempRanges.push(range);
+      const max = d.daily.temperature_2m_max[i];
+      const min = d.daily.temperature_2m_min[i];
       const rh = d.daily.relative_humidity_2m_mean[i];
+      const range = max - min;
+      if (!isNaN(range)) months[month].tempRanges.push(range);
       if (rh != null) months[month].humidity.push(rh);
+      if (max != null) months[month].maxTemps.push(max);
+      if (min != null) months[month].minTemps.push(min);
+      if ([max, min, rh].some(v => v != null && !isNaN(v))) summary.observedDays++;
+      if (max >= 35) summary.heatDays35C++;
+      if (max >= 32) summary.heatDays32C++;
+      if (min <= -10) summary.coldDaysMinus10C++;
+      if (rh >= 70) summary.humidDays70++;
+      if (rh <= 25) summary.dryDays25++;
+      if (range >= 25) summary.swingDays25C++;
     });
 
-    const result = months.map(m => ({
+    const monthly = months.map(m => ({
       avgTempRange: avg(m.tempRanges),
       avgHumidity: avg(m.humidity),
+      avgMaxTemp: avg(m.maxTemps),
+      avgMinTemp: avg(m.minTemps),
     }));
+
+    const annualSummary = Object.fromEntries(Object.entries(summary).map(([key, value]) => [
+      key,
+      key === 'observedDays' ? value : Math.round(value / historyYears),
+    ]));
+
+    const result = {
+      months: monthly,
+      summary: annualSummary,
+      source: 'Open-Meteo Historical API',
+      confidence: summary.observedDays > 300 ? 'medium' : 'low',
+      timestamp: new Date().toISOString(),
+    };
 
     cacheSet(key, result, 24 * 60 * 60 * 1000);
     return result;

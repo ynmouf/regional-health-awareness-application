@@ -1,17 +1,18 @@
 /* All scores: 0–100, 100 = safest */
 
-export function scoreAirQuality(airNow, openMeteo) {
+export function scoreAirQuality(airNow, openMeteo, seasonal = null, geo = {}) {
   const aqi = airNow?.aqi ?? openMeteo?.aqi ?? null;
   const pm25 = openMeteo?.pm25 ?? null;
-  const pollenLevel = openMeteo?.pollenLevel ?? 'None';
+  const pollenLevel = openMeteo?.pollenLevel ?? null;
   const pollenSource = openMeteo?.pollenSource ?? openMeteo?.source ?? null;
 
   const aqiScore = aqi != null ? inverseAQI(aqi) : null;
   const pm25Score = pm25 != null ? inversePM25(pm25) : null;
-  const pollenScore = pollenLevelScore(pollenLevel);
+  const pollenScore = pollenLevel != null ? pollenLevelScore(pollenLevel) : null;
+  const smokeScore = wildfireSmokeScore(geo, seasonal);
 
   // Weight what we have
-  if (aqiScore == null && pm25Score == null) {
+  if (aqiScore == null && pm25Score == null && pollenScore == null && smokeScore == null) {
     return {
       score: 50,
       sub: { aqiScore: null, pm25Score: null, pollenScore, aqi, pm25, pollenLevel, pollenSource },
@@ -20,89 +21,180 @@ export function scoreAirQuality(airNow, openMeteo) {
   }
 
   const weights = { aqi: 0.5, pm25: 0.3, pollen: 0.2 };
+  if (smokeScore != null) {
+    weights.aqi = 0.38;
+    weights.pm25 = 0.28;
+    weights.pollen = 0.18;
+    weights.smoke = 0.16;
+  }
   let score = 0, total = 0;
   if (aqiScore != null) { score += aqiScore * weights.aqi; total += weights.aqi; }
   if (pm25Score != null) { score += pm25Score * weights.pm25; total += weights.pm25; }
   if (pollenScore != null) { score += pollenScore * weights.pollen; total += weights.pollen; }
-  score = Math.round(score / total * (weights.aqi + weights.pm25 + weights.pollen));
+  if (smokeScore != null) { score += smokeScore * weights.smoke; total += weights.smoke; }
+  score = Math.round(score / total);
 
   return {
     score: clamp(Math.round(score)),
-    sub: { aqiScore, pm25Score, pollenScore, aqi, pm25, pollenLevel, pollenSource },
+    sub: { aqiScore, pm25Score, pollenScore, smokeScore, aqi, pm25, pollenLevel, pollenSource },
     confidence: airNow ? 'high' : openMeteo?.confidence ?? 'medium',
   };
 }
 
-export function scoreInfection(cdc) {
-  if (!cdc) return { score: 50, sub: {}, confidence: 'low' };
+export function scoreInfection(cdc, wastewater = null, localHealth = null) {
+  if (!cdc && !wastewater && !localHealth) return { score: 50, sub: {}, confidence: 'low' };
 
-  const { ariLevel, combinedHospRate, covidHospRate, fluHospRate, rsvHospRate, weekEnd } = cdc;
+  const { ariLevel, combinedHospRate, covidHospRate, fluHospRate, rsvHospRate, weekEnd } = cdc ?? {};
   const ariScore = ariLevelScore(ariLevel);
   const combinedHospScore = combinedHospRate != null ? inverseRespHosp(combinedHospRate) : null;
   const pathogenScores = [covidHospRate, fluHospRate, rsvHospRate]
     .filter(v => v != null)
     .map(inverseRespHosp);
   const pathogenHospScore = pathogenScores.length ? avg(pathogenScores) : null;
+  const wastewaterScore = wastewater?.avgPercentile != null ? inversePercentile(wastewater.avgPercentile) : null;
+  const communityHealthScore = localHealthScore(localHealth);
 
   let score = 0, total = 0;
-  const w = { ari: 0.45, combined: 0.35, pathogens: 0.20 };
+  const w = { ari: 0.35, combined: 0.28, pathogens: 0.15, wastewater: 0.12, community: 0.10 };
   if (ariScore != null) { score += ariScore * w.ari; total += w.ari; }
   if (combinedHospScore != null) { score += combinedHospScore * w.combined; total += w.combined; }
   if (pathogenHospScore != null) { score += pathogenHospScore * w.pathogens; total += w.pathogens; }
+  if (wastewaterScore != null) { score += wastewaterScore * w.wastewater; total += w.wastewater; }
+  if (communityHealthScore != null) { score += communityHealthScore * w.community; total += w.community; }
 
-  if (total === 0) return { score: 50, sub: { ariScore, combinedHospScore, pathogenHospScore }, confidence: 'low' };
+  if (total === 0) return { score: 50, sub: { ariScore, combinedHospScore, pathogenHospScore, wastewaterScore, communityHealthScore }, confidence: 'low' };
 
   return {
     score: clamp(Math.round(score / total)),
     sub: {
-      ariScore, combinedHospScore, pathogenHospScore,
+      ariScore, combinedHospScore, pathogenHospScore, wastewaterScore, communityHealthScore,
       ariLevel, combinedHospRate, covidHospRate, fluHospRate, rsvHospRate, weekEnd,
+      wastewaterPercentile: wastewater?.avgPercentile ?? null,
+      wastewaterMaxPercentile: wastewater?.maxPercentile ?? null,
+      wastewaterDate: wastewater?.latestDate ?? null,
+      asthmaRate: localHealth?.measures?.CASTHMA?.value ?? null,
+      copdRate: localHealth?.measures?.COPD?.value ?? null,
+      smokingRate: localHealth?.measures?.CSMOKING?.value ?? null,
+      uninsuredRate: localHealth?.measures?.ACCESS2?.value ?? null,
     },
-    confidence: total >= 0.55 ? 'high' : 'medium',
+    confidence: total >= 0.55 && cdc ? 'high' : total >= 0.25 ? 'medium' : 'low',
   };
 }
 
-export function scoreHealthcare(overpass) {
+/**
+ * Drinking Water Safety — EPA SDWIS (data.epa.gov/efservice)
+ * Scores 0–100 (100 = safest water).
+ * Based on health-based violations and acute-risk incidents reported to the EPA.
+ */
+export function scoreWaterSafety(waterData) {
+  if (!waterData) return { score: 50, sub: {}, confidence: 'low' };
+
+  const { healthViolations5yr, tier1Count, outstandingPct } = waterData;
+
+  // Violation count score (fewer = better)
+  const violationScore = (() => {
+    const n = healthViolations5yr ?? 0;
+    if (n === 0) return 100;
+    if (n <= 2)  return 85;
+    if (n <= 5)  return 70;
+    if (n <= 10) return 50;
+    if (n <= 20) return 30;
+    return 15;
+  })();
+
+  // Tier 1 acute-risk penalty
+  const tier1Score = (() => {
+    const t = tier1Count ?? 0;
+    if (t === 0) return 100;
+    if (t === 1) return 60;
+    if (t <= 3)  return 30;
+    return 10;
+  })();
+
+  // Outstanding performer bonus
+  const outstandingScore = outstandingPct != null
+    ? Math.min(100, 60 + outstandingPct * 0.4)
+    : null;
+
+  const parts = [
+    [violationScore,   0.55],
+    [tier1Score,       0.35],
+    [outstandingScore, 0.10],
+  ];
+
+  let score = 0, total = 0;
+  for (const [val, w] of parts) {
+    if (val != null) { score += val * w; total += w; }
+  }
+  if (total === 0) return { score: 50, sub: {}, confidence: 'low' };
+
+  return {
+    score: clamp(Math.round(score / total)),
+    sub: {
+      violationScore, tier1Score, outstandingScore,
+      healthViolations5yr, tier1Count, outstandingPct,
+      systemCount: waterData.systemCount,
+    },
+    confidence: waterData.confidence ?? 'medium',
+  };
+}
+
+export function scoreHealthcare(overpass, cmsQuality = null) {
   if (!overpass || (overpass.hospitalCount == null && overpass.nearestHospitalKm == null)) return { score: 50, sub: {}, confidence: 'low' };
 
   const {
-    hospitalCount, pharmacyCount, hasSpecialist,
-    nearestHospitalKm, nearestHospitalName, urgentCareCount,
+    hospitalCount, pharmacyCount, specialistCount, hasSpecialist,
+    nearestHospitalKm, estimatedHospitalDriveMinutes, nearestHospitalName, urgentCareCount,
   } = overpass;
   const hospScore = nearestHospitalKm != null
     ? hospitalDistanceScore(nearestHospitalKm)
     : hospitalCountScore(hospitalCount ?? 0);
+  const driveScore = estimatedHospitalDriveMinutes != null ? driveTimeScore(estimatedHospitalDriveMinutes) : null;
   const pharmScore = pharmacyCountScore(pharmacyCount ?? 0);
-  const specScore = hasSpecialist ? 100 : 20;
+  const specScore = specialistDepthScore(specialistCount, hasSpecialist);
   const urgentScore = urgentCareCount > 0 ? 100 : 50;
+  const qualityScore = cmsQuality?.avgRating != null ? cmsRatingScore(cmsQuality.avgRating) : healthcareQualityProxy(overpass);
 
-  const score = Math.round(hospScore * 0.55 + pharmScore * 0.20 + specScore * 0.20 + urgentScore * 0.05);
+  const parts = [
+    [hospScore, 0.30],
+    [driveScore, 0.18],
+    [pharmScore, 0.14],
+    [specScore, 0.24],
+    [urgentScore, 0.04],
+    [qualityScore, 0.10],
+  ].filter(([value]) => value != null);
+  const score = weightedAverage(parts);
   return {
     score: clamp(score),
     sub: {
-      hospScore, pharmScore, specScore, urgentScore,
-      hospitalCount, pharmacyCount, hasSpecialist,
-      nearestHospitalKm, nearestHospitalName, urgentCareCount,
+      hospScore, driveScore, pharmScore, specScore, urgentScore, qualityScore,
+      hospitalCount, pharmacyCount, specialistCount, hasSpecialist,
+      nearestHospitalKm, estimatedHospitalDriveMinutes, nearestHospitalName, urgentCareCount,
+      cmsAvgRating: cmsQuality?.avgRating ?? null,
+      cmsRatedCount: cmsQuality?.ratedCount ?? null,
+      qualityProxyScore: cmsQuality?.avgRating == null ? qualityScore : null,
     },
-    confidence: overpass.confidence ?? 'medium',
+    confidence: cmsQuality?.avgRating != null ? 'high' : overpass.confidence ?? 'medium',
   };
 }
 
-export function scoreClimate(weather, openMeteo) {
+export function scoreClimate(weather, openMeteo, seasonal = null) {
   const humidity = weather?.avgHumidity ?? null;
   const tempRange = weather?.avgTempRange ?? null;
-  const pollenLevel = openMeteo?.pollenLevel ?? 'None';
+  const pollenLevel = openMeteo?.pollenLevel ?? null;
   const pollenSource = openMeteo?.pollenSource ?? openMeteo?.source ?? null;
 
   const humScore = humidity != null ? humidityScore(humidity) : null;
   const tempScore = tempRange != null ? tempRangeScore(tempRange) : null;
-  const pollenScore = pollenLevelScore(pollenLevel);
+  const pollenScore = pollenLevel != null ? pollenLevelScore(pollenLevel) : null;
+  const tailRiskScore = seasonalTailRiskScore(seasonal?.summary);
 
   let score = 0, total = 0;
-  const w = { hum: 0.50, temp: 0.30, pollen: 0.20 };
+  const w = { hum: 0.38, temp: 0.24, pollen: 0.16, tail: 0.22 };
   if (humScore != null) { score += humScore * w.hum; total += w.hum; }
   if (tempScore != null) { score += tempScore * w.temp; total += w.temp; }
   if (pollenScore != null) { score += pollenScore * w.pollen; total += w.pollen; }
+  if (tailRiskScore != null) { score += tailRiskScore * w.tail; total += w.tail; }
 
   if (total === 0) return { score: 50, sub: {}, confidence: 'low' };
 
@@ -112,22 +204,57 @@ export function scoreClimate(weather, openMeteo) {
       humScore, tempScore, pollenScore, humidity, tempRange,
       maxTemp: weather?.maxTemp ?? null,
       minTemp: weather?.minTemp ?? null,
-      pollenLevel, pollenSource,
+      pollenLevel, pollenSource, tailRiskScore,
+      heatDays35C: seasonal?.summary?.heatDays35C ?? null,
+      coldDaysMinus10C: seasonal?.summary?.coldDaysMinus10C ?? null,
+      humidDays70: seasonal?.summary?.humidDays70 ?? null,
+      dryDays25: seasonal?.summary?.dryDays25 ?? null,
+      swingDays25C: seasonal?.summary?.swingDays25C ?? null,
     },
-    confidence: weather?.avgHumidity != null || weather?.avgTempRange != null ? weather.confidence ?? 'medium' : 'low',
+    confidence: seasonal?.summary ? 'medium' : weather?.avgHumidity != null || weather?.avgTempRange != null ? weather.confidence ?? 'medium' : 'low',
   };
 }
 
 export function scoreOverall(scores, weights) {
-  const { air, infection, healthcare, climate } = scores;
+  const { air, water, healthcare, climate } = scores;
   const w = normalizeWeights(weights);
-  const overall = Math.round(
+  return clamp(Math.round(
     air * w.air +
-    infection * w.infection +
+    water * w.water +
     healthcare * w.healthcare +
     climate * w.climate
-  );
-  return clamp(overall);
+  ));
+}
+
+export function buildRiskAssessment({ scores, categoryResults, data = {}, geo = {}, weights, profile }) {
+  const base = scoreOverall(scores, weights);
+  const confidences = {
+    air: categoryResults.air.confidence,
+    water: categoryResults.water.confidence,
+    healthcare: categoryResults.healthcare.confidence,
+    climate: categoryResults.climate.confidence,
+  };
+  const normalized = normalizeWeights(weights);
+  const confidenceScore = Object.entries(confidences).reduce((sum, [key, value]) => {
+    return sum + confidenceValue(value) * normalized[key];
+  }, 0);
+  const redFlags = buildRedFlags({ categoryResults, data, geo, profile });
+  const penalty = redFlags.reduce((sum, flag) => sum + flag.penalty, 0);
+  const overall = clamp(Math.round(base - penalty));
+  const uncertainty = Math.round((1 - confidenceScore) * 18 + redFlags.length * 1.5);
+
+  return {
+    base,
+    overall,
+    confidence: confidenceLabel(confidenceScore),
+    confidenceScore,
+    range: [clamp(overall - uncertainty), clamp(overall + Math.max(4, Math.round(uncertainty * 0.7)))],
+    redFlags,
+    dataCompleteness: {
+      used: Object.values(confidences).filter(value => value !== 'low').length,
+      total: Object.keys(confidences).length,
+    },
+  };
 }
 
 export function scoreLabel(score) {
@@ -155,10 +282,10 @@ export function monthlyRiskScore(monthData) {
 }
 
 export function normalizeWeights(w) {
-  const total = w.air + w.infection + w.healthcare + w.climate;
+  const total = w.air + w.water + w.healthcare + w.climate;
   return {
     air: w.air / total,
-    infection: w.infection / total,
+    water: w.water / total,
     healthcare: w.healthcare / total,
     climate: w.climate / total,
   };
@@ -222,11 +349,45 @@ function hospitalDistanceScore(km) {
   return 10;
 }
 
+function driveTimeScore(minutes) {
+  if (minutes <= 12) return 100;
+  if (minutes <= 25) return lerp(100, 78, (minutes - 12) / 13);
+  if (minutes <= 45) return lerp(78, 45, (minutes - 25) / 20);
+  if (minutes <= 75) return lerp(45, 15, (minutes - 45) / 30);
+  return 5;
+}
+
 function pharmacyCountScore(n) {
   if (n === 0) return 0;
   if (n <= 2) return 60;
   if (n <= 5) return 80;
   return 100;
+}
+
+function specialistDepthScore(count, hasSpecialist) {
+  if (count == null) return hasSpecialist ? 75 : 20;
+  if (count <= 0) return 15;
+  if (count === 1) return 58;
+  if (count <= 3) return 78;
+  return 100;
+}
+
+function cmsRatingScore(rating) {
+  if (rating == null) return null;
+  return clamp(Math.round((rating - 1) / 4 * 100));
+}
+
+function healthcareQualityProxy(data) {
+  if (!data) return null;
+  const hospitals = data.hospitalCount ?? 0;
+  const specialists = data.specialistCount ?? (data.hasSpecialist ? 1 : 0);
+  const academicNameBonus = (data.hospitals ?? []).some(hospital =>
+    /university|children|national|jewish|mayo|cleveland|mass general|brigham|johns hopkins|md anderson/i.test(hospital.name ?? '')
+  ) ? 12 : 0;
+  const redundancy = hospitals >= 10 ? 35 : hospitals >= 5 ? 26 : hospitals >= 2 ? 16 : hospitals === 1 ? 8 : 0;
+  const specialty = specialists >= 4 ? 35 : specialists >= 2 ? 26 : specialists === 1 ? 16 : 0;
+  const pharmacy = (data.pharmacyCount ?? 0) >= 10 ? 18 : (data.pharmacyCount ?? 0) >= 4 ? 12 : (data.pharmacyCount ?? 0) >= 1 ? 6 : 0;
+  return clamp(35 + redundancy + specialty + pharmacy + academicNameBonus);
 }
 
 function humidityScore(rh) {
@@ -243,6 +404,114 @@ function tempRangeScore(range) {
   if (range < 25) return lerp(100, 70, (range - 15) / 10);
   if (range < 35) return lerp(70, 40, (range - 25) / 10);
   return Math.max(15, lerp(40, 15, (range - 35) / 10));
+}
+
+function inversePercentile(percentile) {
+  return clamp(Math.round(100 - percentile));
+}
+
+function wildfireSmokeScore(geo, seasonal) {
+  const stateCode = geo?.stateCode?.toUpperCase();
+  const smokeStates = {
+    CA: 25, OR: 30, WA: 35, NV: 35, ID: 38, MT: 38, UT: 42, CO: 45, AZ: 48, NM: 48,
+  };
+  if (!smokeStates[stateCode]) return null;
+  const dryDays = seasonal?.summary?.dryDays25 ?? 0;
+  const heatDays = seasonal?.summary?.heatDays32C ?? 0;
+  const climatePenalty = Math.min(20, dryDays * 0.15 + heatDays * 0.25);
+  return clamp(Math.round(smokeStates[stateCode] - climatePenalty));
+}
+
+function localHealthScore(localHealth) {
+  const m = localHealth?.measures;
+  if (!m) return null;
+  const values = [
+    burdenScore(m.CASTHMA?.value, 7, 13),
+    burdenScore(m.COPD?.value, 4, 10),
+    burdenScore(m.CSMOKING?.value, 10, 22),
+    burdenScore(m.ACCESS2?.value, 6, 18),
+  ].filter(v => v != null);
+  return values.length ? Math.round(avg(values)) : null;
+}
+
+function burdenScore(value, good, poor) {
+  if (value == null) return null;
+  if (value <= good) return 100;
+  if (value >= poor) return 30;
+  return Math.round(lerp(100, 30, (value - good) / (poor - good)));
+}
+
+function seasonalTailRiskScore(summary = null) {
+  if (!summary) return null;
+  const heatPenalty = Math.min(34, summary.heatDays35C * 1.3 + summary.heatDays32C * 0.35);
+  const coldPenalty = Math.min(22, summary.coldDaysMinus10C * 0.7);
+  const humidityPenalty = Math.min(24, summary.humidDays70 * 0.28);
+  const drynessPenalty = Math.min(14, summary.dryDays25 * 0.16);
+  const swingPenalty = Math.min(18, summary.swingDays25C * 0.5);
+  return clamp(Math.round(100 - heatPenalty - coldPenalty - humidityPenalty - drynessPenalty - swingPenalty));
+}
+
+function buildRedFlags({ categoryResults, data, geo, profile }) {
+  const sensitivity = profile?.redFlagSensitivity ?? 1;
+  const flags = [];
+  const add = (severity, title, text, penalty) => flags.push({
+    severity,
+    title,
+    text,
+    penalty: Math.round(penalty * sensitivity),
+  });
+  const air = categoryResults.air.sub;
+  const water = categoryResults.water.sub;
+  const healthcare = categoryResults.healthcare.sub;
+  const climate = categoryResults.climate.sub;
+
+  if (air.aqi >= 101) add('high', 'Current AQI is elevated', `AQI ${air.aqi} is unhealthy for sensitive groups.`, 7);
+  if (air.pm25 >= 35) add('high', 'Fine-particle pollution is high', `PM2.5 is ${air.pm25.toFixed(1)} ug/m3.`, 6);
+  if (['High', 'Very High'].includes(air.pollenLevel)) add('medium', 'Pollen is elevated', `${air.pollenLevel} pollen can worsen respiratory symptoms.`, 3);
+  if (air.smokeScore != null && air.smokeScore < 50) add('medium', 'Wildfire-smoke tail risk', `${geo.stateCode || 'This region'} has meaningful seasonal smoke exposure risk.`, 5);
+
+  // Water safety red flags (EPA SDWIS violations)
+  if (water.tier1Count > 0) add('high', 'Acute-risk water violation in last 5 years', `${water.tier1Count} Tier 1 public notification${water.tier1Count !== 1 ? 's' : ''} issued — immediate health risk events reported.`, 9);
+  if (water.healthViolations5yr >= 5) add('high', 'Multiple water safety violations', `${water.healthViolations5yr} health-based violations in the last 5 years.`, 7);
+  if (water.healthViolations5yr >= 1 && water.healthViolations5yr < 5) add('medium', 'Recent drinking water violation', `${water.healthViolations5yr} health-based violation${water.healthViolations5yr !== 1 ? 's' : ''} reported in last 5 years.`, 5);
+
+  if (healthcare.estimatedHospitalDriveMinutes >= 35) add('high', 'Long emergency travel time', `Estimated hospital drive time is ${healthcare.estimatedHospitalDriveMinutes} minutes.`, 8);
+  if (healthcare.hospitalCount <= 1) add('medium', 'Limited hospital redundancy', 'Few hospital options were found in the wider search area.', 4);
+  if (!healthcare.hasSpecialist) add('medium', 'No local immunology/allergy specialist', 'Specialty care may require travel or telehealth.', 5);
+  if (healthcare.cmsAvgRating != null && healthcare.cmsAvgRating < 3) add('medium', 'Nearby hospital quality is below average', `Matched CMS average rating is ${healthcare.cmsAvgRating.toFixed(1)} stars.`, 4);
+
+  if (climate.heatDays35C >= 10) add('high', 'Frequent extreme heat', `${climate.heatDays35C} days/year exceeded 35°C.`, 6);
+  if (climate.coldDaysMinus10C >= 20) add('medium', 'Frequent extreme cold', `${climate.coldDaysMinus10C} days/year dropped below -10°C.`, 4);
+  if (climate.humidDays70 >= 45) add('medium', 'High humidity/mold pressure', `${climate.humidDays70} high-humidity days/year suggest indoor mold-management burden.`, 4);
+
+  Object.entries(categoryResults).forEach(([key, result]) => {
+    if (result.confidence === 'low') add('low', `${labelForCategory(key)} data is weak`, 'This category contributes uncertainty to the score.', 2);
+  });
+
+  return flags.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+}
+
+function confidenceValue(value) {
+  return { high: 1, medium: 0.65, low: 0.25 }[value] ?? 0.25;
+}
+
+function confidenceLabel(value) {
+  if (value >= 0.82) return 'High';
+  if (value >= 0.55) return 'Medium';
+  return 'Low';
+}
+
+function labelForCategory(key) {
+  return { air: 'Air quality', water: 'Water safety', healthcare: 'Healthcare', climate: 'Climate' }[key] ?? key;
+}
+
+function severityRank(severity) {
+  return { low: 1, medium: 2, high: 3 }[severity] ?? 0;
+}
+
+function weightedAverage(parts) {
+  const total = parts.reduce((sum, [, weight]) => sum + weight, 0);
+  return Math.round(parts.reduce((sum, [value, weight]) => sum + value * weight, 0) / total);
 }
 
 function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
