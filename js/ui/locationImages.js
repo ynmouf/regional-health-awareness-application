@@ -45,27 +45,28 @@ export function renderLocationImages(placePhotos, lat, lon, locationName) {
 
 const GRID_COLS = 3; // fixed columns — ensures no empty gaps
 
+/*
+  Varied collage layout (6 photos):
+  ┌───────┬───┐
+  │       │ B │  A = large (2×2)
+  │   A   ├───┤  B,C = medium (1×1)
+  │       │ C │
+  ├───┬───┴───┤  D,E,F = small (share bottom row)
+  │ D │ E │ F │
+  └───┴───┴───┘
+*/
 function renderCollageInto(panel, photos) {
-  // First photo as hero
-  const hero = document.createElement('div');
-  hero.className = 'collage-hero';
-  hero.innerHTML = buildPhotoCard(photos[0]);
-  panel.appendChild(hero);
-
-  const remaining = photos.slice(1);
-  if (!remaining.length) return;
-
-  // Trim to nearest multiple of GRID_COLS so no empty cells
-  const count = Math.floor(remaining.length / GRID_COLS) * GRID_COLS || remaining.length;
   const grid = document.createElement('div');
-  grid.className = 'collage-grid';
-  grid.style.gridTemplateColumns = `repeat(${GRID_COLS}, 1fr)`;
-  remaining.slice(0, count).forEach(photo => {
+  grid.className = 'collage-varied';
+
+  const areas = ['a','b','c','d','e','f'];
+  photos.slice(0, 6).forEach((photo, i) => {
     const cell = document.createElement('div');
-    cell.className = 'collage-cell';
+    cell.className = `collage-area-${areas[i]}`;
     cell.innerHTML = buildPhotoCard(photo);
     grid.appendChild(cell);
   });
+
   panel.appendChild(grid);
 }
 
