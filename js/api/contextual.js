@@ -68,20 +68,21 @@ export function getInfectionRiskContext(infResult, geo) {
 }
 
 export function getHealthcareContext(hcResult, geo) {
-  const { hospitalCount, hasSpecialist, nearestHospitalKm, nearestHospitalName } = hcResult?.sub || {};
+  const { hospitalCount, hasSpecialist, nearestHospitalKm, nearestHospitalName, nearestSpecialistKm, specialistSearchRadiusKm } = hcResult?.sub || {};
   const insights = [];
+  const specialistRadius = specialistSearchRadiusKm ?? 50;
 
-  if (!hasSpecialist) {
+  if (hasSpecialist === false) {
     insights.push({
       icon: '⚠️',
-      title: 'No Local Immunology Specialist',
-      text: `You'll need to travel for specialized immunology care. Consider telehealth options or plan quarterly trips to a major medical center.`
+      title: 'No Regional Immunology Specialist Found',
+      text: `No allergy or immunology specialist was found within ${specialistRadius} km. Consider telehealth options or plan periodic trips to a major medical center.`
     });
-  } else {
+  } else if (hasSpecialist === true) {
     insights.push({
       icon: '✓',
-      title: 'Immunology Specialist Nearby',
-      text: `Having an immunologist within 20 km is ideal for ongoing immune monitoring and medication adjustments.`
+      title: 'Immunology Specialist Found',
+      text: `The nearest allergy or immunology specialist found is ${nearestSpecialistKm != null ? `${nearestSpecialistKm.toFixed(1)} km away` : `within ${specialistRadius} km`}.`
     });
   }
 

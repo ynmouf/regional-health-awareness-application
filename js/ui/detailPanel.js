@@ -1,5 +1,5 @@
 import { scoreColor } from '../scoring.js';
-import { getAirQualityContext, getHealthcareContext, getClimateContext } from '../api/contextual.js';
+import { getAirQualityContext, getHealthcareContext, getClimateContext } from '../api/contextual.js?v=provider-search-20260603';
 
 const TOOLTIPS = {
   aqi: 'The Air Quality Index summarises how clean the air is. Values above 100 are considered unhealthy for sensitive groups including immunocompromised individuals.',
@@ -102,15 +102,19 @@ const CATEGORIES = {
         score: sub.hospScore, tooltip: TOOLTIPS.hospitals,
       }, 'Hospitals within 50 km', TOOLTIPS.hospitals),
       metricOrMissing(sub.pharmacyCount != null, {
-        name: 'Pharmacies within 5 km', value: sub.pharmacyCount ?? '?',
-        display: `${sub.pharmacyCount ?? 'Unknown'} pharmac${sub.pharmacyCount !== 1 ? 'ies' : 'y'}`,
+        name: `Pharmacies within ${sub.pharmacySearchRadiusKm ?? 15} km`, value: sub.pharmacyCount ?? '?',
+        display: sub.pharmacyCount > 0
+          ? `${sub.pharmacyCount} pharmac${sub.pharmacyCount !== 1 ? 'ies' : 'y'}${sub.nearestPharmacyKm != null ? ` · nearest ${sub.nearestPharmacyKm.toFixed(1)} km` : ''}`
+          : `None found within ${sub.pharmacySearchRadiusKm ?? 15} km`,
         score: sub.pharmScore, tooltip: TOOLTIPS.pharmacies,
-      }, 'Pharmacies within 5 km', TOOLTIPS.pharmacies),
+      }, `Pharmacies within ${sub.pharmacySearchRadiusKm ?? 15} km`, TOOLTIPS.pharmacies),
       metricOrMissing(sub.hasSpecialist != null, {
-        name: 'Immunology/Allergy Specialist within 20 km', value: sub.hasSpecialist,
-        display: sub.hasSpecialist ? `${sub.specialistCount ?? 1} specialist${sub.specialistCount === 1 ? '' : 's'} found` : 'None found',
+        name: `Immunology/Allergy Specialist within ${sub.specialistSearchRadiusKm ?? 50} km`, value: sub.hasSpecialist,
+        display: sub.hasSpecialist
+          ? `${sub.specialistCount ?? 1} specialist${sub.specialistCount === 1 ? '' : 's'} found${sub.nearestSpecialistKm != null ? ` · nearest ${sub.nearestSpecialistKm.toFixed(1)} km` : ''}`
+          : `None found within ${sub.specialistSearchRadiusKm ?? 50} km`,
         score: sub.specScore, tooltip: TOOLTIPS.specialist,
-      }, 'Immunology/Allergy Specialist within 20 km', TOOLTIPS.specialist),
+      }, `Immunology/Allergy Specialist within ${sub.specialistSearchRadiusKm ?? 50} km`, TOOLTIPS.specialist),
       sub.cmsAvgRating != null && {
         name: 'Matched CMS Hospital Quality', value: sub.cmsAvgRating,
         display: `${sub.cmsAvgRating.toFixed(1)} stars (${sub.cmsRatedCount} rated)`,

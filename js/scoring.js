@@ -167,13 +167,14 @@ export function scoreHealthcare(overpass, cmsQuality = null) {
   const {
     hospitalCount, pharmacyCount, specialistCount, hasSpecialist,
     nearestHospitalKm, estimatedHospitalDriveMinutes, nearestHospitalName, urgentCareCount,
+    nearestPharmacyKm, nearestSpecialistKm, pharmacySearchRadiusKm, specialistSearchRadiusKm,
   } = overpass;
   const hospScore = nearestHospitalKm != null
     ? hospitalDistanceScore(nearestHospitalKm)
     : hospitalCountScore(hospitalCount ?? 0);
   const driveScore = estimatedHospitalDriveMinutes != null ? driveTimeScore(estimatedHospitalDriveMinutes) : null;
-  const pharmScore = pharmacyCountScore(pharmacyCount ?? 0);
-  const specScore = specialistDepthScore(specialistCount, hasSpecialist);
+  const pharmScore = pharmacyCount != null ? pharmacyCountScore(pharmacyCount) : null;
+  const specScore = specialistDepthScore(specialistCount, hasSpecialist, nearestSpecialistKm);
   const urgentScore = urgentCareCount > 0 ? 100 : 50;
   const qualityScore = cmsQuality?.avgRating != null ? cmsRatingScore(cmsQuality.avgRating) : healthcareQualityProxy(overpass);
 
@@ -192,6 +193,7 @@ export function scoreHealthcare(overpass, cmsQuality = null) {
       hospScore, driveScore, pharmScore, specScore, urgentScore, qualityScore,
       hospitalCount, pharmacyCount, specialistCount, hasSpecialist,
       nearestHospitalKm, estimatedHospitalDriveMinutes, nearestHospitalName, urgentCareCount,
+      nearestPharmacyKm, nearestSpecialistKm, pharmacySearchRadiusKm, specialistSearchRadiusKm,
       cmsAvgRating: cmsQuality?.avgRating ?? null,
       cmsRatedCount: cmsQuality?.ratedCount ?? null,
       qualityProxyScore: cmsQuality?.avgRating == null ? qualityScore : null,
@@ -394,10 +396,14 @@ function pharmacyCountScore(n) {
   return 100;
 }
 
-function specialistDepthScore(count, hasSpecialist) {
+function specialistDepthScore(count, hasSpecialist, nearestSpecialistKm = null) {
   if (count == null) return hasSpecialist ? 75 : 20;
   if (count <= 0) return 15;
-  if (count === 1) return 58;
+  if (count === 1) {
+    if (nearestSpecialistKm != null && nearestSpecialistKm > 35) return 45;
+    if (nearestSpecialistKm != null && nearestSpecialistKm > 20) return 52;
+    return 58;
+  }
   if (count <= 3) return 78;
   return 100;
 }
@@ -510,7 +516,7 @@ function buildRedFlags({ categoryResults, data, geo, profile }) {
   if (!categoryResults.healthcare.unavailable) {
     if (healthcare.estimatedHospitalDriveMinutes >= 35) add('high', 'Long emergency travel time', `Estimated hospital drive time is ${healthcare.estimatedHospitalDriveMinutes} minutes.`, 8);
     if (healthcare.hospitalCount <= 1) add('medium', 'Limited hospital redundancy', 'Few hospital options were found in the wider search area.', 4);
-    if (healthcare.hasSpecialist === false) add('medium', 'No local immunology/allergy specialist', 'Specialty care may require travel or telehealth.', 5);
+    if (healthcare.hasSpecialist === false) add('medium', 'No regional immunology/allergy specialist found', 'Specialty care may require longer travel or telehealth.', 5);
     if (healthcare.cmsAvgRating != null && healthcare.cmsAvgRating < 3) add('medium', 'Nearby hospital quality is below average', `Matched CMS average rating is ${healthcare.cmsAvgRating.toFixed(1)} stars.`, 4);
   }
 

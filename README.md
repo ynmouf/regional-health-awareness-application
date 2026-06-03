@@ -166,8 +166,8 @@ Users can customize these in the Settings panel.
 **Healthcare Access (30%)**
 - Nearest hospital distance within a 50 km search radius
 - Estimated drive-time bands
-- Pharmacy count within 5 km
-- Immunology/allergy specialist within 20 km
+- Pharmacy count within 15 km
+- Immunology/allergy/asthma specialist within 50 km
 - CMS hospital ratings where available, otherwise a local quality proxy
 
 **Climate & Allergens (15%)**

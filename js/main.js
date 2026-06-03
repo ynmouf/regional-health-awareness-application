@@ -2,19 +2,19 @@ import { geocode } from './geocoding.js?v=grey-missing-20260603';
 import { fetchAirNow } from './api/airnow.js';
 import { fetchAirQuality, fetchWeather, fetchSeasonalHistory } from './api/openmeteo.js';
 import { fetchWaterSafety } from './api/waterSafety.js?v=grey-missing-20260603';
-import { fetchHealthcare } from './api/overpass.js';
-import { fetchGoogleHealthcare } from './api/googleHealthcare.js';
+import { fetchHealthcare } from './api/overpass.js?v=provider-search-20260603';
+import { fetchGoogleHealthcare } from './api/googleHealthcare.js?v=provider-search-20260603';
 import { fetchGooglePollen, mergePollen } from './api/googlePollen.js';
 import { fetchCMSHospitalQuality } from './api/cms.js';
 import {
   scoreAirQuality, scoreWaterSafety, scoreHealthcare, scoreClimate,
   buildRiskAssessment,
-} from './scoring.js?v=grey-missing-20260603';
+} from './scoring.js?v=provider-search-20260603';
 import { getWeights, initWeightSliders, getAlertThreshold, getActiveProfile } from './weights.js';
 import { initSearch } from './ui/search.js';
 import { initLightbox } from './ui/lightbox.js';
 import { renderOverall, renderCategoryCard, renderRadarChart, updateRadarChart, renderRiskIntelligence } from './ui/scoreCard.js?v=grey-missing-20260603';
-import { initDetailPanel, setDetailData } from './ui/detailPanel.js?v=grey-missing-20260603';
+import { initDetailPanel, setDetailData } from './ui/detailPanel.js?v=provider-search-20260603';
 import { renderSeasonalCalendar } from './ui/seasonalCalendar.js';
 import { renderLocationImages } from './ui/locationImages.js';
 import { initComparePanel, openCompare } from './ui/comparePanel.js?v=grey-missing-20260603';
@@ -342,7 +342,11 @@ function waterNote(geo, waterData) {
 
 function hcSummary(sub, overpass) {
   if (!overpass || (sub?.hospitalCount == null && sub?.nearestHospitalKm == null)) return 'Healthcare facility data unavailable.';
-  const spec = sub.hasSpecialist ? 'Specialist nearby ✓' : 'No specialist found';
+  const specialistRadius = sub.specialistSearchRadiusKm ?? 50;
+  const pharmacyRadius = sub.pharmacySearchRadiusKm ?? 15;
+  const spec = sub.hasSpecialist
+    ? `Specialist ${sub.nearestSpecialistKm != null ? `${sub.nearestSpecialistKm.toFixed(1)} km` : `within ${specialistRadius} km`}`
+    : `No specialist found within ${specialistRadius} km`;
   const hospital = sub.estimatedHospitalDriveMinutes != null
     ? `Hospital ~${sub.estimatedHospitalDriveMinutes} min`
     : sub.nearestHospitalKm != null
@@ -354,8 +358,8 @@ function hcSummary(sub, overpass) {
       ? `quality proxy ${sub.qualityProxyScore}/100`
       : 'quality unrated';
   const pharmacies = sub.pharmacyCount > 0
-    ? `${sub.pharmacyCount} pharmac${sub.pharmacyCount !== 1 ? 'ies' : 'y'}`
-    : 'no nearby pharmacies';
+    ? `${sub.pharmacyCount} pharmac${sub.pharmacyCount !== 1 ? 'ies' : 'y'} within ${pharmacyRadius} km`
+    : `no pharmacies found within ${pharmacyRadius} km`;
   return `${hospital} · ${quality} · ${pharmacies} · ${spec}`;
 }
 
