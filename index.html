@@ -6,10 +6,12 @@
   <title>Health Location Scorer</title>
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' https://cdn.jsdelivr.net;
-    img-src 'self' https://maps.googleapis.com https://places.googleapis.com https://lh3.googleusercontent.com https://upload.wikimedia.org https://commons.wikimedia.org data:;
+    script-src 'self' https://cdn.jsdelivr.net https://unpkg.com;
+    img-src 'self' https://maps.googleapis.com https://places.googleapis.com https://lh3.googleusercontent.com https://upload.wikimedia.org https://commons.wikimedia.org https://*.arcgisonline.com https://*.tile.openstreetmap.org data:;
     connect-src 'self'
       https://places.googleapis.com
+      https://*.arcgisonline.com
+      https://*.tile.openstreetmap.org
       https://nominatim.openstreetmap.org
       https://api.zippopotam.us
       https://www.airnowapi.org
@@ -27,6 +29,8 @@
   ">
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -269,6 +273,28 @@
       </div>
     </div>
   </aside>
+
+  <!-- Photo lightbox -->
+  <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
+    <div class="lightbox-backdrop"></div>
+    <button class="lightbox-close" aria-label="Close photo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="lightbox-prev" aria-label="Previous photo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 4l-8 8 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="lightbox-next" aria-label="Next photo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 4l8 8-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="lightbox-content">
+      <img class="lightbox-img" src="" alt="" />
+      <div class="lightbox-caption">
+        <span class="lightbox-credit"></span>
+        <a class="lightbox-link" href="#" target="_blank" rel="noopener">View on Google Maps</a>
+      </div>
+    </div>
+    <div class="lightbox-dots"></div>
+  </div>
 
   <!-- Local API keys — create config.local.js from config.example.js (gitignored) -->
   <script src="config.local.js" onerror="void 0"></script>

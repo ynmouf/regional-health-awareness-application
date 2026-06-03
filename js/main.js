@@ -9,6 +9,7 @@ import {
 } from './scoring.js';
 import { getWeights, saveWeights, initWeightSliders, getAlertThreshold } from './weights.js';
 import { initSearch } from './ui/search.js';
+import { initLightbox } from './ui/lightbox.js';
 import { renderOverall, renderCategoryCard, renderRadarChart, updateRadarChart } from './ui/scoreCard.js';
 import { initDetailPanel, setDetailData } from './ui/detailPanel.js';
 import { renderSeasonalCalendar } from './ui/seasonalCalendar.js';
@@ -23,6 +24,7 @@ let lastResult = null;
 
 // ── Boot ────────────────────────────────────────────
 initSearch(handleSearch);
+initLightbox();
 initDetailPanel();
 initWeightSliders(weights, onWeightsChanged);
 initSettingsPanel();
@@ -80,7 +82,7 @@ async function handleSearch(query, preResolved) {
     }, geo, seasonal);
 
     // Render
-    renderLocationImages(photos, geo.lat, geo.lon, geo.displayName);
+    renderLocationImages(photos, geo.lat, geo.lon, geo.displayName, healthcare?.hospitals);
     renderOverall(geo.displayName, overall);
     renderCategoryCard('air',        airResult.score,  airSummary(airResult.sub, airNow),  airResult.confidence);
     renderCategoryCard('infection',  infResult.score,  infSummary(infResult.sub, cdc),      infResult.confidence);

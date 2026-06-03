@@ -47,7 +47,11 @@ export async function fetchHealthcare(lat, lon) {
       hospitalCount: hospitals.length,
       pharmacyCount: pharmacies.length,
       hasSpecialist,
-      hospitals: hospitals.slice(0, 5).map(e => e.tags?.name ?? 'Hospital'),
+      hospitals: hospitals.slice(0, 10).map(e => ({
+        name: e.tags?.name ?? 'Hospital',
+        lat: e.lat ?? e.center?.lat ?? null,
+        lon: e.lon ?? e.center?.lon ?? null,
+      })),
       pharmacies: pharmacies.slice(0, 3).map(e => e.tags?.name ?? 'Pharmacy'),
       source: 'OpenStreetMap (Overpass API)',
       confidence: 'medium',
@@ -79,6 +83,6 @@ function buildQuery(lat, lon) {
   way["healthcare:speciality"~"immunology|allergy"](around:20000,${lat},${lon});
   node["name"~"[Ii]mmunol|[Aa]llerg"](around:20000,${lat},${lon});
 );
-out body;
+out body center;
 `;
 }
