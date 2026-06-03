@@ -13,15 +13,15 @@ export function renderLocationImages(photos, lat, lon, locationName) {
     return;
   }
 
-  // Google Static Maps — satellite view of the exact lat/lon
+  // Google Static Maps (satellite) + Street View (ground-level photo)
   if (hasMapsKey && lat != null && lon != null) {
     const key = getMapsKey();
-    const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=12&size=600x280&maptype=satellite&key=${escAttr(key)}`;
-    const roadmapUrl   = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=12&size=600x280&maptype=roadmap&markers=color:red%7C${lat},${lon}&key=${escAttr(key)}`;
+    const satelliteUrl  = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=600x280&maptype=satellite&key=${escAttr(key)}`;
+    const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=600x280&location=${lat},${lon}&fov=90&pitch=0&key=${escAttr(key)}`;
 
     [
-      { url: satelliteUrl, label: 'Satellite view' },
-      { url: roadmapUrl,   label: 'Map view' },
+      { url: satelliteUrl,  label: 'Satellite view' },
+      { url: streetViewUrl, label: 'Street view' },
     ].forEach(({ url, label }) => {
       const card = document.createElement('div');
       card.className = 'image-card';
