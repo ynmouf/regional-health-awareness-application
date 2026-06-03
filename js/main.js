@@ -57,10 +57,10 @@ async function handleSearch(query, preResolved) {
 
     // Attach raw API data for detail panel
     setDetailData({
-      air:        { sub: airResult.sub, timestamp: airQuality?.timestamp, source: googlePollen ? 'AirNow (EPA), Open-Meteo, and Google Pollen API' : null, note: geo.countryCode !== 'US' ? 'AirNow data is US-only; using modeled AQI.' : null },
-      infection:  { sub: infResult.sub, timestamp: cdc?.timestamp, source: cdc?.source, note: cdc?.note ?? (geo.countryCode !== 'US' ? 'CDC disease data is US-only — not available for this location.' : null) },
-      healthcare: { sub: hcResult.sub, timestamp: healthcare?.timestamp, source: healthcare?.source },
-      climate:    { sub: clResult.sub, timestamp: weather?.timestamp, source: googlePollen ? 'Open-Meteo Weather and Google Pollen API' : null },
+      air:        { sub: airResult.sub, timestamp: airQuality?.timestamp, source: googlePollen ? 'AirNow (EPA), Open-Meteo, and Google Pollen API' : null, confidence: airResult.confidence, note: geo.countryCode !== 'US' ? 'AirNow data is US-only; using modeled AQI.' : null },
+      infection:  { sub: infResult.sub, timestamp: cdc?.timestamp, source: cdc?.source, confidence: infResult.confidence, note: cdc?.note ?? (geo.countryCode !== 'US' ? 'CDC disease data is US-only — not available for this location.' : null) },
+      healthcare: { sub: hcResult.sub, timestamp: healthcare?.timestamp, source: healthcare?.source, confidence: hcResult.confidence },
+      climate:    { sub: clResult.sub, timestamp: weather?.timestamp, source: googlePollen ? 'Open-Meteo Weather and Google Pollen API' : null, confidence: clResult.confidence },
     }, geo, seasonal);
 
     // Render

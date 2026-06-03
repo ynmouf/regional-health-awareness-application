@@ -39,6 +39,17 @@ export function renderCategoryCard(id, score, summary, confidence) {
   conf.textContent = lbl.label;
   conf.className = `confidence-badge ${lbl.badgeCls}`;
   conf.title = `Data confidence: ${confidence}`;
+
+  const dataConf = document.getElementById(`data-conf-${id}`);
+  if (dataConf) {
+    dataConf.textContent = `Data confidence: ${formatConfidence(confidence)}`;
+  }
+}
+
+function formatConfidence(confidence) {
+  if (!confidence) return 'Unknown';
+  const value = String(confidence).trim().toLowerCase();
+  return value ? value[0].toUpperCase() + value.slice(1) : 'Unknown';
 }
 
 export function renderRadarChart(scores) {
