@@ -273,7 +273,9 @@ function showError(msg) {
 function airSummary(sub, airNow) {
   const source = airNow ? 'AirNow (EPA)' : 'Open-Meteo';
   const pollenSource = sub?.pollenSource ? ` via ${sub.pollenSource}` : '';
-  if (sub?.aqi != null) return `AQI ${sub.aqi} (${source}) · PM2.5 ${sub.pm25?.toFixed(1) ?? '?'} µg/m³ · Pollen: ${sub.pollenLevel ?? 'Unknown'}${pollenSource}`;
+  const pm25 = sub?.pm25 != null ? `PM2.5 ${sub.pm25.toFixed(1)} µg/m³` : 'PM2.5 unavailable';
+  if (sub?.aqi != null) return `AQI ${sub.aqi} (${source}) · ${pm25} · Pollen: ${sub.pollenLevel ?? 'Unknown'}${pollenSource}`;
+  if (sub?.pm25 != null) return `${pm25} · Pollen: ${sub.pollenLevel ?? 'Unknown'}${pollenSource} · AQI unavailable`;
   return `Pollen: ${sub?.pollenLevel ?? 'Unknown'} · AQI data unavailable`;
 }
 

@@ -11,19 +11,25 @@ export function scoreAirQuality(airNow, openMeteo) {
   const pollenScore = pollenLevelScore(pollenLevel);
 
   // Weight what we have
-  if (aqiScore == null && pm25Score == null) return { score: 50, sub: { aqiScore: null, pm25Score: null, pollenScore }, confidence: 'low' };
+  if (aqiScore == null && pm25Score == null) {
+    return {
+      score: 50,
+      sub: { aqiScore: null, pm25Score: null, pollenScore, aqi, pm25, pollenLevel, pollenSource },
+      confidence: 'low',
+    };
+  }
 
   const weights = { aqi: 0.5, pm25: 0.3, pollen: 0.2 };
   let score = 0, total = 0;
   if (aqiScore != null) { score += aqiScore * weights.aqi; total += weights.aqi; }
   if (pm25Score != null) { score += pm25Score * weights.pm25; total += weights.pm25; }
-  score += pollenScore * weights.pollen; total += weights.pollen;
+  if (pollenScore != null) { score += pollenScore * weights.pollen; total += weights.pollen; }
   score = Math.round(score / total * (weights.aqi + weights.pm25 + weights.pollen));
 
   return {
     score: clamp(Math.round(score)),
     sub: { aqiScore, pm25Score, pollenScore, aqi, pm25, pollenLevel, pollenSource },
-    confidence: airNow ? 'high' : 'medium',
+    confidence: airNow ? 'high' : openMeteo?.confidence ?? 'medium',
   };
 }
 
@@ -96,7 +102,7 @@ export function scoreClimate(weather, openMeteo) {
   const w = { hum: 0.50, temp: 0.30, pollen: 0.20 };
   if (humScore != null) { score += humScore * w.hum; total += w.hum; }
   if (tempScore != null) { score += tempScore * w.temp; total += w.temp; }
-  score += pollenScore * w.pollen; total += w.pollen;
+  if (pollenScore != null) { score += pollenScore * w.pollen; total += w.pollen; }
 
   if (total === 0) return { score: 50, sub: {}, confidence: 'low' };
 
@@ -108,7 +114,7 @@ export function scoreClimate(weather, openMeteo) {
       minTemp: weather?.minTemp ?? null,
       pollenLevel, pollenSource,
     },
-    confidence: weather ? 'medium' : 'low',
+    confidence: weather?.avgHumidity != null || weather?.avgTempRange != null ? weather.confidence ?? 'medium' : 'low',
   };
 }
 
@@ -178,7 +184,7 @@ function inversePM25(pm25) {
 
 function pollenLevelScore(level) {
   const map = { 'None': 100, 'Low': 80, 'Moderate': 55, 'High': 25, 'Very High': 0 };
-  return map[level] ?? 60;
+  return map[level] ?? null;
 }
 
 function ariLevelScore(level) {
