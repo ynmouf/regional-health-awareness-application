@@ -7,75 +7,67 @@ export function renderLocationImages(placePhotos, lat, lon, locationName) {
   const key = getMapsKey();
   const hasPhotos = placePhotos && placePhotos.length;
   const hasKey = !!key;
+  const hasSatellite = hasKey && lat != null && lon != null;
 
-  if (!hasPhotos && !hasKey) {
+  if (!hasPhotos && !hasSatellite) {
     container.hidden = true;
     return;
   }
 
-  if (hasPhotos) {
-    // Full photo collage from Places API
-    renderCollage(container, placePhotos, locationName);
-  } else if (hasKey && lat != null && lon != null) {
-    // Fallback: satellite + street view if Places API not available
-    renderMapFallback(container, lat, lon, locationName, key);
+  const wrapper = document.createElement('div');
+  wrapper.className = `location-media${hasPhotos && hasSatellite ? ' has-both' : ''}`;
+
+  // Satellite panel (left)
+  if (hasSatellite) {
+    const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=800x600&maptype=satellite&key=${escAttr(key)}`;
+    const satPanel = document.createElement('div');
+    satPanel.className = 'media-satellite';
+    satPanel.innerHTML = `
+      <div class="collage-img-wrap">
+        <img src="${satelliteUrl}" alt="Satellite view of ${escAttr(locationName)}" loading="lazy" />
+        <span class="collage-credit">Satellite · Google Maps</span>
+      </div>
+    `;
+    wrapper.appendChild(satPanel);
   }
 
+  // Photos collage (right)
+  if (hasPhotos) {
+    const photosPanel = document.createElement('div');
+    photosPanel.className = 'media-photos';
+    renderCollageInto(photosPanel, placePhotos);
+    wrapper.appendChild(photosPanel);
+  }
+
+  container.appendChild(wrapper);
   container.hidden = false;
 }
 
-function renderCollage(container, photos, locationName) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'photo-collage';
-
-  // Hero photo (first, large)
+function renderCollageInto(panel, photos) {
+  // First photo as hero
   const hero = document.createElement('div');
   hero.className = 'collage-hero';
-  hero.innerHTML = buildPhotoCard(photos[0], locationName);
-  wrapper.appendChild(hero);
+  hero.innerHTML = buildPhotoCard(photos[0]);
+  panel.appendChild(hero);
 
-  // Grid of remaining photos (up to 5)
+  // Remaining photos in a grid (up to 5 more)
   if (photos.length > 1) {
     const grid = document.createElement('div');
     grid.className = 'collage-grid';
     photos.slice(1, 6).forEach(photo => {
       const cell = document.createElement('div');
       cell.className = 'collage-cell';
-      cell.innerHTML = buildPhotoCard(photo, locationName);
+      cell.innerHTML = buildPhotoCard(photo);
       grid.appendChild(cell);
     });
-    wrapper.appendChild(grid);
+    panel.appendChild(grid);
   }
-
-  container.appendChild(wrapper);
 }
 
-function renderMapFallback(container, lat, lon, locationName, key) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'photo-collage';
-
-  const hero = document.createElement('div');
-  hero.className = 'collage-hero';
-  const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=13&size=800x400&maptype=satellite&key=${escAttr(key)}`;
-  hero.innerHTML = `<div class="collage-img-wrap"><img src="${satelliteUrl}" alt="Satellite view of ${escAttr(locationName)}" loading="lazy" /><span class="collage-credit">Satellite view · Google Maps</span></div>`;
-
-  const streetUrl = `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lon}&fov=90&pitch=0&key=${escAttr(key)}`;
-  const street = document.createElement('div');
-  street.className = 'collage-grid';
-  const cell = document.createElement('div');
-  cell.className = 'collage-cell';
-  cell.innerHTML = `<div class="collage-img-wrap"><img src="${streetUrl}" alt="Street view of ${escAttr(locationName)}" loading="lazy" /><span class="collage-credit">Street view · Google Maps</span></div>`;
-  street.appendChild(cell);
-
-  wrapper.appendChild(hero);
-  wrapper.appendChild(street);
-  container.appendChild(wrapper);
-}
-
-function buildPhotoCard(photo, locationName) {
+function buildPhotoCard(photo) {
   return `
     <div class="collage-img-wrap">
-      <img src="${escAttr(photo.url)}" alt="${escAttr(photo.alt || locationName)}" loading="lazy" />
+      <img src="${escAttr(photo.url)}" alt="${escAttr(photo.alt || '')}" loading="lazy" />
       <a href="${escAttr(photo.creditUrl)}" target="_blank" rel="noopener" class="collage-credit">
         📷 ${escAttr(photo.credit)}
       </a>

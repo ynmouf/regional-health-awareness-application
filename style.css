@@ -195,46 +195,71 @@ nav { display: flex; gap: .4rem; }
 .location-images { margin-bottom: 1.5rem; }
 .location-images[hidden] { display: none; }
 
-.photo-collage { display: flex; flex-direction: column; gap: .5rem; }
+/* Side-by-side layout when both satellite + photos present */
+.location-media {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.location-media.has-both {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+  align-items: start;
+}
 
-.collage-hero .collage-img-wrap img {
-  width: 100%; height: 300px; object-fit: cover;
+/* Satellite panel */
+.media-satellite .collage-img-wrap img {
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  max-height: 460px;
+  object-fit: cover;
   border-radius: var(--radius);
   display: block;
 }
 
+/* Photos panel */
+.media-photos { display: flex; flex-direction: column; gap: .5rem; }
+
+.collage-hero .collage-img-wrap img {
+  width: 100%; height: 200px; object-fit: cover;
+  border-radius: var(--radius);
+  display: block;
+}
 .collage-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: .5rem;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: .4rem;
 }
 .collage-cell .collage-img-wrap img {
-  width: 100%; height: 140px; object-fit: cover;
+  width: 100%; height: 100px; object-fit: cover;
   border-radius: var(--radius-sm);
   display: block;
 }
 
+/* Shared image wrapper */
 .collage-img-wrap {
   position: relative; overflow: hidden;
   border-radius: inherit;
 }
-.collage-img-wrap img {
-  transition: transform .3s ease;
-}
+.collage-img-wrap img { transition: transform .3s ease; }
 .collage-img-wrap:hover img { transform: scale(1.04); }
 
 .collage-credit {
   position: absolute; bottom: 0; left: 0; right: 0;
-  background: linear-gradient(transparent, rgba(0,0,0,.65));
-  color: #fff;
-  font-size: .72rem;
-  padding: 1.2rem .6rem .4rem;
-  text-decoration: none;
-  display: block;
-  opacity: 0;
-  transition: opacity .2s;
+  background: linear-gradient(transparent, rgba(0,0,0,.7));
+  color: #fff; font-size: .7rem;
+  padding: 1.5rem .6rem .4rem;
+  text-decoration: none; display: block;
+  opacity: 0; transition: opacity .2s;
 }
 .collage-img-wrap:hover .collage-credit { opacity: 1; }
+
+@media (max-width: 640px) {
+  .location-media.has-both { grid-template-columns: 1fr; }
+  .media-satellite .collage-img-wrap img { min-height: 200px; max-height: 220px; }
+}
 
 /* Overall card */
 .overall-card {
