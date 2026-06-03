@@ -242,7 +242,10 @@
         </div>
         <div class="compare-search">
           <label for="compare-location-input" class="sr-only">Second city or ZIP code</label>
-          <input id="compare-location-input" type="text" placeholder="Second city or ZIP code" autocomplete="off" />
+          <div class="compare-input-wrap">
+            <input id="compare-location-input" type="text" placeholder="Second city or ZIP code" autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-controls="compare-suggestions" aria-expanded="false" />
+            <ul id="compare-suggestions" class="suggestions-list" role="listbox" aria-label="Location suggestions" hidden></ul>
+          </div>
           <button type="button" id="compare-search-btn">Compare</button>
         </div>
         <p id="compare-status" class="compare-status" aria-live="polite"></p>
