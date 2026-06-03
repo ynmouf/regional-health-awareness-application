@@ -115,6 +115,7 @@ nav { display: flex; gap: .4rem; }
   white-space: nowrap;
 }
 #btn-search:hover { background: #3a59e8; }
+#btn-search:disabled { opacity: .7; cursor: wait; }
 
 .suggestions-list {
   position: absolute; top: calc(100% + .4rem); left: 0; right: 0;

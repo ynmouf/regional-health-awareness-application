@@ -23,6 +23,7 @@ import { fetchPlacePhotos } from './api/places.js';
 // ── State ───────────────────────────────────────────
 let weights = getWeights();
 let lastResult = null;
+let activeSearchId = 0;
 
 // ── Boot ────────────────────────────────────────────
 initSearch(handleSearch);
@@ -36,7 +37,9 @@ checkURLCompare();
 
 // ── Search handler ───────────────────────────────────
 async function handleSearch(query, preResolved) {
+  const searchId = ++activeSearchId;
   showLoading(true);
+  setSearchBusy(true);
   hideResults();
   clearError();
 
@@ -49,6 +52,7 @@ async function handleSearch(query, preResolved) {
       airResult, infResult, hcResult, clResult, scores, overall,
     } = assessment;
 
+    if (searchId !== activeSearchId) return;
     lastResult = assessment.result;
 
     // Attach raw API data for detail panel
@@ -87,9 +91,13 @@ async function handleSearch(query, preResolved) {
     window.history.replaceState({}, '', url);
 
   } catch (err) {
+    if (searchId !== activeSearchId) return;
     showError(err.message || 'Something went wrong. Please try again.');
   } finally {
-    showLoading(false);
+    if (searchId === activeSearchId) {
+      showLoading(false);
+      setSearchBusy(false);
+    }
   }
 }
 
@@ -235,6 +243,11 @@ function showResults() {
 }
 function setLoadingStatus(msg) {
   document.getElementById('loading-status').textContent = msg;
+}
+function setSearchBusy(busy) {
+  const btn = document.getElementById('btn-search');
+  btn.disabled = busy;
+  btn.textContent = busy ? 'Searching...' : 'Search';
 }
 function clearError() {
   const el = document.getElementById('error-container');
